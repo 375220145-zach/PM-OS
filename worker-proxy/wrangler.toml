@@ -1,0 +1,12 @@
+name = "pm-os-deepseek-proxy"
+main = "index.ts"
+compatibility_date = "2025-06-01"
+
+# Free tier: 100k requests/day, well within PM OS usage
+usage_model = "standard"
+
+[ vars ]
+# DEEPSEEK_API_KEY — set via secret (not here):
+#   npx wrangler secret put DEEPSEEK_API_KEY
+# CLIENT_SECRET — optional shared secret:
+#   npx wrangler secret put CLIENT_SECRET
