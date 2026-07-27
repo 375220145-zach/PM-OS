@@ -66,9 +66,10 @@ type TabKey = 'risk' | 'cost' | 'schedule';
 interface Props {
   onRunAnalysis: () => Promise<InsightsResult | null>;
   isDemo?: boolean;
+  hasSelectedProject?: boolean;
 }
 
-export default function AIInsightsCard({ onRunAnalysis, isDemo }: Props) {
+export default function AIInsightsCard({ onRunAnalysis, isDemo, hasSelectedProject }: Props) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<InsightsResult | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('risk');
@@ -87,7 +88,7 @@ export default function AIInsightsCard({ onRunAnalysis, isDemo }: Props) {
     }
   }, [onRunAnalysis]);
 
-  const displayResult = isDemo ? DEMO_INSIGHTS : result;
+  const displayResult = (isDemo && !result) ? DEMO_INSIGHTS : result;
 
   const tabs: { key: TabKey; label: string; count?: number }[] = [
     { key: 'risk', label: '风险', count: displayResult?.risk?.risks.length },
@@ -128,8 +129,8 @@ export default function AIInsightsCard({ onRunAnalysis, isDemo }: Props) {
             <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Demo 示例</span>
           )}
         </div>
-        <Button size="sm" onClick={handleRun} disabled={loading}>
-          {loading ? '分析中...' : '运行分析'}
+        <Button size="sm" onClick={handleRun} disabled={loading || !hasSelectedProject}>
+          {loading ? '分析中...' : !hasSelectedProject ? '请先选择项目' : '运行分析'}
         </Button>
       </div>
 
@@ -165,7 +166,7 @@ export default function AIInsightsCard({ onRunAnalysis, isDemo }: Props) {
 
         {!displayResult && !loading && (
           <div className="text-center py-8 text-gray-500 text-sm">
-            点击「运行分析」获取 AI 洞察
+            {!hasSelectedProject ? '请在上方选择一个具体项目后再运行分析' : '点击「运行分析」获取 AI 洞察'}
           </div>
         )}
 

@@ -76,7 +76,7 @@ export async function extractEntitiesApi(
   data: string,
 ): Promise<ExtractionOutput> {
   const systemPrompt = buildExtractionPrompt(sourceType, data);
-  const raw = await callDeepSeek(systemPrompt, '请提取实体和关系，严格按 JSON 格式输出。');
+  const raw = await callDeepSeek(systemPrompt, '请提取实体和关系，严格按 JSON 格式输出。', 16384);
   const cleaned = repairJson(raw);
 
   let parsed: unknown;

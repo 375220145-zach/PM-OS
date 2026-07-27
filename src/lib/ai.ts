@@ -11,7 +11,7 @@ function getClient(): OpenAI {
   });
 }
 
-export async function callDeepSeek(systemPrompt: string, userMessage: string): Promise<string> {
+export async function callDeepSeek(systemPrompt: string, userMessage: string, maxTokens?: number): Promise<string> {
   const client = getClient();
   let lastError: Error | null = null;
 
@@ -24,7 +24,7 @@ export async function callDeepSeek(systemPrompt: string, userMessage: string): P
           { role: 'user', content: userMessage },
         ],
         temperature: 0.3,
-        max_tokens: 4096,
+        max_tokens: maxTokens ?? 4096,
         response_format: { type: 'json_object' },
       });
 

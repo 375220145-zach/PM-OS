@@ -314,10 +314,10 @@ export default function HomePage() {
         {/* AI Insights */}
         <AIInsightsCard
           isDemo={isDemoMode()}
+          hasSelectedProject={!!selectedProjectId}
           onRunAnalysis={async () => {
-            if (activeProjects.length === 0) return null;
-            const pid = selectedProjectId || activeProjects[0].id;
-            const data = await collectProjectDataWithGraph(pid);
+            if (!selectedProjectId) return null;
+            const data = await collectProjectDataWithGraph(selectedProjectId);
             if (!data) return null;
             const [riskRes, costRes, scheduleRes] = await Promise.all([
               fetch('/api/ai/risk', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).then(r=>r.json()).catch(()=>null),
