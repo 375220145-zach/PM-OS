@@ -30,8 +30,10 @@ export default function BudgetPage() {
   const [projectPhase, setProjectPhase] = useState<Phase>('evt');
   const selectedPhase = (searchParams.get('phase') as Phase) || projectPhase;
   const [budget, setBudget] = useState<(BudgetItem & { otherLabel?: string })[]>([]);
-  const [editing, setEditing] = useState(false);
   const [advanceDialog, setAdvanceDialog] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; indices: number[] }>({ open: false, indices: [] });
   function setSelectedPhase(p: Phase) { router.push(`/project/${id}/budget?phase=${p}`, { scroll: false }); }
   const currentIdx = PHASES.findIndex(p => p.key === selectedPhase);
   const nextPhase = currentIdx < PHASES.length - 1 ? PHASES[currentIdx + 1] : null;
@@ -67,32 +69,48 @@ export default function BudgetPage() {
     });
   }, [id, selectedPhase]);
 
-  async function save() {
+  async function persistBudget(items: (BudgetItem & { otherLabel?: string })[]) {
+    const clean = items.map(({ otherLabel, ...b }) => ({ ...b, phase: selectedPhase }));
     const fresh = await db.projects.get(id);
-    if (!fresh) return;
-    const clean = budget.map(({ otherLabel, ...b }) => ({ ...b, phase: selectedPhase }));
-    const otherPhases = (fresh.budget ?? []).filter(b => (b as BudgetItem & { phase?: Phase }).phase !== selectedPhase);
+    const otherPhases = (fresh?.budget ?? []).filter(b => (b as BudgetItem & { phase?: Phase }).phase !== selectedPhase);
     await db.projects.update(id, { budget: [...otherPhases, ...clean], updatedAt: Date.now() });
-    setProject(fresh);
-    setEditing(false);
   }
 
-  function addItem() {
-    // Don't add if there's already an empty unedited row
-    const hasEmpty = budget.some(b => !b.name.trim() && b.estimated === 0 && b.actual === 0);
-    if (hasEmpty) return;
-    setBudget([...budget, { category: 'mold', name: '', estimated: 0, actual: 0, phase: selectedPhase, otherLabel: '' }]);
-    setEditing(true);
+  async function addItem() {
+    const item = { category: 'mold' as BudgetCategory, name: '', estimated: 0, actual: 0, phase: selectedPhase, otherLabel: '' };
+    const next = [...budget, item];
+    setBudget(next);
+    await persistBudget(next);
   }
 
-  function updateItem(index: number, field: string, value: string | number) {
+  async function updateItem(index: number, field: string, value: string | number) {
     const next = [...budget];
     next[index] = { ...next[index], [field]: value };
     setBudget(next);
+    await persistBudget(next);
   }
 
-  function removeItem(index: number) {
-    setBudget(budget.filter((_, i) => i !== index));
+  function toggleSelect(index: number) {
+    const n = new Set(selectedIndices);
+    if (n.has(index)) n.delete(index); else n.add(index);
+    setSelectedIndices(n);
+  }
+  function selectAll() { setSelectedIndices(new Set(budget.map((_, i) => i))); }
+  function requestDeleteSelected() {
+    setConfirmDelete({ open: true, indices: [...selectedIndices].sort((a, b) => b - a) }); // reverse order for stable splice
+  }
+  async function executeDelete(indices: number[]) {
+    let next = [...budget];
+    for (const i of indices) next.splice(i, 1);
+    setBudget(next);
+    setSelectedIndices(new Set());
+    setSelectionMode(false);
+    setConfirmDelete({ open: false, indices: [] });
+    await persistBudget(next);
+  }
+
+  async function removeItem(index: number) {
+    setConfirmDelete({ open: true, indices: [index] });
   }
 
   function handleDownloadTemplate() {
@@ -118,11 +136,9 @@ export default function BudgetPage() {
     }));
     const merged = [...budget.map(({ otherLabel, ...b }) => b), ...newItems];
     setBudget(merged.map(b => ({ ...b, otherLabel: '' })));
-    setEditing(true);
     const fresh = await db.projects.get(id);
     const otherPhases = (fresh?.budget ?? []).filter(b => (b as BudgetItem & { phase?: Phase }).phase !== selectedPhase);
     await db.projects.update(id, { budget: [...otherPhases, ...newItems.map(b => ({ ...b, phase: selectedPhase }))], updatedAt: Date.now() });
-    setEditing(false);
   }
 
   const totalEst = budget.reduce((s, i) => s + i.estimated, 0);
@@ -184,13 +200,21 @@ export default function BudgetPage() {
             </div>
           </div>
           <div className="flex gap-3">
+            <button onClick={() => { setSelectionMode(!selectionMode); setSelectedIndices(new Set()); }}
+              className={`text-xs px-2.5 py-1.5 rounded border transition-colors ${selectionMode ? 'bg-blue-50 border-blue-300 text-blue-600' : 'border-gray-200 text-gray-400 hover:text-gray-700'}`}>
+              {selectionMode ? '退出选择' : '批量操作'}
+            </button>
+            {selectionMode && (
+              <button onClick={selectAll} className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50">
+                全选 ({budget.length})
+              </button>
+            )}
+            {selectionMode && selectedIndices.size > 0 && (
+              <Button variant="danger" size="sm" onClick={requestDeleteSelected}>删除所选 ({selectedIndices.size})</Button>
+            )}
             <Button variant="secondary" size="sm" onClick={handleDownloadTemplate}>下载模板</Button>
             <Button variant="secondary" size="sm" onClick={handleImport}>批量导入</Button>
-            {editing ? (
-              <><Button variant="secondary" onClick={() => { setBudget((project?.budget ?? []).map(b => ({ ...b, otherLabel: '' }))); setEditing(false); }}>取消</Button><Button onClick={save}>保存</Button></>
-            ) : (
-              <Button onClick={addItem}>+ 添加费用项</Button>
-            )}
+            <Button onClick={addItem}>+ 添加费用项</Button>
           </div>
         </div>
 
@@ -226,44 +250,45 @@ export default function BudgetPage() {
             <table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr className="border-b border-gray-200 text-gray-400 text-left">
+                  {selectionMode && <th className="px-4 py-3 w-8" />}
                   <th className="px-4 py-3">类别</th><th className="px-4 py-3">项目</th>
                   <th className="px-4 py-3 text-right">预估 (¥)</th><th className="px-4 py-3 text-right">实际 (¥)</th>
                   <th className="px-4 py-3 text-right">偏差</th>
-                  {editing && <th className="px-4 py-3 w-10" />}
+                  <th className="px-4 py-3 w-10" />
                 </tr>
               </thead>
               <tbody>
                 {budget.map((item, i) => (
                   <tr key={i} className="border-b border-gray-200">
+                    {selectionMode && (
+                      <td className="px-4 py-2">
+                        <input type="checkbox" checked={selectedIndices.has(i)} onChange={() => toggleSelect(i)} className="w-4 h-4" />
+                      </td>
+                    )}
                     <td className="px-4 py-2">
-                      {editing ? (
-                        <div className="flex items-center gap-1">
-                          <select value={item.category} onChange={e => updateItem(i, 'category', e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs">
-                            {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                          </select>
-                          {item.category === 'other' && (
-                            <input value={item.otherLabel ?? ''} onChange={e => updateItem(i, 'otherLabel', e.target.value)}
-                              placeholder="说明" className="bg-gray-100 border border-gray-200 rounded px-1 py-1 text-gray-700 text-xs w-16" />
-                          )}
-                        </div>
-                      ) : <span className="text-gray-700">{item.category === 'other' && item.name ? item.name : CATEGORY_LABELS[item.category]}</span>}
+                      <div className="flex items-center gap-1">
+                        <select value={item.category} onChange={e => updateItem(i, 'category', e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs">
+                          {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                        </select>
+                        {item.category === 'other' && (
+                          <input value={item.otherLabel ?? ''} onChange={e => updateItem(i, 'otherLabel', e.target.value)}
+                            placeholder="说明" className="bg-gray-100 border border-gray-200 rounded px-1 py-1 text-gray-700 text-xs w-16" />
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2">
-                      {editing ? <input value={item.name} onChange={e => updateItem(i, 'name', e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-full" />
-                        : <span className="text-gray-700">{item.name}</span>}
+                      <input value={item.name} onChange={e => updateItem(i, 'name', e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-full" />
                     </td>
                     <td className="px-4 py-2 text-right">
-                      {editing ? <input type="number" value={item.estimated} onChange={e => updateItem(i, 'estimated', Number(e.target.value))} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-24 text-right" />
-                        : <span className="text-gray-700">¥{item.estimated.toLocaleString()}</span>}
+                      <input type="number" value={item.estimated} onChange={e => updateItem(i, 'estimated', Number(e.target.value))} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-24 text-right" />
                     </td>
                     <td className="px-4 py-2 text-right">
-                      {editing ? <input type="number" value={item.actual} onChange={e => updateItem(i, 'actual', Number(e.target.value))} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-24 text-right" />
-                        : <span className="text-gray-700">¥{item.actual.toLocaleString()}</span>}
+                      <input type="number" value={item.actual} onChange={e => updateItem(i, 'actual', Number(e.target.value))} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-24 text-right" />
                     </td>
                     <td className={`px-4 py-2 text-right ${item.actual > item.estimated ? 'text-red-600' : 'text-emerald-600'}`}>
                       {item.estimated > 0 ? `${((item.actual - item.estimated) / item.estimated * 100).toFixed(0)}%` : '-'}
                     </td>
-                    {editing && <td className="px-4 py-2"><button onClick={() => removeItem(i)} className="text-red-600 hover:text-red-300 text-xs">删除</button></td>}
+                    <td className="px-4 py-2"><button onClick={() => removeItem(i)} className="text-red-400 hover:text-red-600 text-xs">删除</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -300,11 +325,20 @@ export default function BudgetPage() {
       <ConfirmDialog
         open={advanceDialog}
         title="推进到下一阶段"
-        message={`是否将当前「${PHASE_LABELS[selectedPhase]}」的 ${budget.filter(b => b.name.trim() || b.estimated > 0 || b.actual > 0).length} 条预算复制到「${nextPhase?.label ?? ''}」？选择"是"复制，选择"否"空白开始。`}
+        message={`是否将当前「${PHASE_LABELS[selectedPhase]}」的 ${budget.length} 条预算复制到「${nextPhase?.label ?? ''}」？选择"是"复制，选择"否"空白开始。`}
         confirmLabel="是，复制"
         variant="primary"
         onConfirm={() => handleAdvance(true)}
         onCancel={handleAdvanceSkip}
+      />
+      <ConfirmDialog
+        open={confirmDelete.open}
+        title="确认删除"
+        message={`确认删除所选 ${confirmDelete.indices.length} 条预算？此操作不可恢复。`}
+        confirmLabel="确认删除"
+        variant="danger"
+        onConfirm={() => executeDelete(confirmDelete.indices)}
+        onCancel={() => setConfirmDelete({ open: false, indices: [] })}
       />
     </AppShell>
   );
