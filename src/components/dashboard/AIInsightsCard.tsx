@@ -38,23 +38,26 @@ interface InsightsResult {
 const DEMO_INSIGHTS: InsightsResult = {
   risk: {
     risks: [
-      { category: 'milestone', severity: 'P0', title: 'TR2 评审材料未完成', impact: 'DVT 准入延迟，影响后续所有节点', suggestion: '优先补齐 FCC 测试报告，评估是否可并行启动模具' },
-      { category: 'mil', severity: 'P1', title: 'Booster-Output 噪声问题未关闭', impact: '可能影响音色品质，用户投诉风险', suggestion: '安排专项技术攻关，确定根因后评估是否需要 ECN' },
+      { category: 'milestone', severity: 'P0', title: 'TR2 评审材料未完成', impact: 'DVT 准入延迟，阻塞下游 3 个节点', suggestion: '优先补齐 FCC 测试报告，评估是否可并行启动模具' },
+      { category: 'mil', severity: 'P1', title: 'Booster-Output 噪声问题未关闭', impact: '音色品质受影响，类似问题在上一个项目中因电源滤波电容选型不当导致，耗时 2 周修复', suggestion: '参考历史项目经验，优先排查电源滤波方案' },
+      { category: 'supplier', severity: 'P0', title: '模具供应商 T1 交期延迟', impact: '该供应商在 Pocket Nano 项目中同样出现延期（逾期 14 天），存在系统性风险', suggestion: '启动第二供应商评估，同步准备备选方案' },
     ],
-    summary: '2 项风险待处理，其中 1 项 P0 涉及关键路径阻塞。',
+    summary: '3 项风险待处理，其中 2 项 P0。结合跨项目知识图谱，供应商延迟和噪声问题有历史复现模式。',
   },
   cost: {
     analyses: [
-      { category: '模具', estimated: 120000, actual: 135000, deviationPercent: 12.5, trend: 'worsening', suggestion: '启动第二供应商询价，评估简化结构的可行性' },
+      { category: '模具', estimated: 500000, actual: 650000, deviationPercent: 30.0, trend: 'worsening', suggestion: '模具超支 30%，同类项目 Pocket Nano 模具成本偏差仅 8%。检查模具复杂度是否超出预估范围' },
+      { category: 'PCB', estimated: 80000, actual: 92000, deviationPercent: 15.0, trend: 'worsening', suggestion: 'PCB 单价高于知识库参考值（SMT 约 0.015/焊点），核实焊点数量和拼板方案' },
     ],
-    summary: '总成本偏差 5.2%，模具超支 12.5% 为主要驱动因素。',
-    totalDeviationPercent: 5.2,
+    summary: '总成本偏差 20.8%，模具和 PCB 为主要驱动因素。跨项目对比显示模具偏差远超同类项目均值。',
+    totalDeviationPercent: 20.8,
   },
   schedule: {
     bottlenecks: [
-      { task: 'TR2 评审', blocks: ['DVT 启动', '模具开模', '认证送检'], riskLevel: 'high', suggestion: '如 TR2 延迟超过缓冲期，评估跳过 HMS 2.0 直接进入 DVT 的可行性' },
+      { task: 'TR2 评审', blocks: ['DVT 启动', '模具开模', '认证送检'], riskLevel: 'high', suggestion: 'TR2 阻塞 3 个下游节点。参考 EVT 阶段平均缓冲周期，建议预留 10 天浮动' },
+      { task: 'PCB Layout 修改', blocks: ['SMT 贴片', '硬件测试'], riskLevel: 'high', suggestion: '逾期 7 天，影响 SMT 和测试节点。同类项目 PCB 修改平均耗时 5 天' },
     ],
-    summary: '1 个瓶颈任务阻塞 3 个下游节点，建议优先排解。',
+    summary: '2 个瓶颈任务阻塞 5 个下游节点。跨项目知识图谱：DVT 阶段常见阻塞点为 TR 评审和 PCB 修改。',
   },
 };
 
