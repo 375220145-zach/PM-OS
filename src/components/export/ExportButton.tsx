@@ -80,7 +80,16 @@ export default function ExportButton({ projectId }: Props) {
         if (snapshot.meetings) await db.meetings.bulkPut(snapshot.meetings);
         if (snapshot.retrospectives) await db.retrospectives.bulkPut(snapshot.retrospectives);
         if (snapshot.changeRecords) await db.changeRecords.bulkPut(snapshot.changeRecords);
-        if (snapshot.bomItems) await db.bomItems.bulkPut(snapshot.bomItems);
+        if (snapshot.bomItems) {
+          // Patch old snapshots missing phase/lockedAt fields
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const patched = snapshot.bomItems.map((item: any) => ({
+            ...item,
+            phase: item.phase || snapshot.project.phase || 'evt',
+            lockedAt: item.lockedAt ?? 0,
+          }));
+          await db.bomItems.bulkPut(patched);
+        }
         if (snapshot.procurementCandidates) await db.procurementCandidates.bulkPut(snapshot.procurementCandidates);
         if (snapshot.certRequirements) await db.certRequirements.bulkPut(snapshot.certRequirements);
         if (snapshot.milEntries) await db.milEntries.bulkPut(snapshot.milEntries);

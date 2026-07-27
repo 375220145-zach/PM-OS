@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import type { BomItem } from '@/types';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import type { BomItem, Phase } from '@/types';
 import { db } from '@/db/database';
+import { PHASES, PHASE_LABELS } from '@/lib/ipd';
 import AppShell from '@/components/layout/AppShell';
 import ProjectHeader from '@/components/layout/ProjectHeader';
 import Button from '@/components/shared/Button';
@@ -18,7 +19,14 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function BomPage() {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const [projectPhase, setProjectPhase] = useState<Phase>('evt');
+  const selectedPhase = (searchParams.get('phase') as Phase) || projectPhase;
+  const [advanceDialog, setAdvanceDialog] = useState<{ open: boolean; targetPhase: Phase } | null>(null);
+  const currentIdx = PHASES.findIndex(p => p.key === selectedPhase);
+  const nextPhase = currentIdx < PHASES.length - 1 ? PHASES[currentIdx + 1] : null;
   const [items, setItems] = useState<BomItem[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'tree' | 'category' | 'cost'>('tree');
@@ -60,8 +68,24 @@ export default function BomPage() {
   }
 
   useEffect(() => {
-    db.bomItems.where('projectId').equals(id).toArray().then(setItems);
+    db.projects.get(id).then(p => { if (p) { setProjectPhase(p.phase); if (!searchParams.get('phase')) setSelectedPhase(p.phase); } });
   }, [id]);
+  function setSelectedPhase(p: Phase) { router.push(`/project/${id}/bom?phase=${p}`, { scroll: false }); }
+
+  async function handleAdvance(copy: boolean) {
+    if (!advanceDialog) return;
+    const target = advanceDialog.targetPhase;
+    if (copy) {
+      const copies = items.map(i => ({ ...i, id: generateId(), phase: target, lockedAt: 0, lockedBy: undefined }));
+      await db.bomItems.bulkAdd(copies);
+    }
+    setSelectedPhase(target);
+    setAdvanceDialog(null);
+  }
+
+  useEffect(() => {
+    db.bomItems.where({ projectId: id, phase: selectedPhase }).toArray().then(setItems);
+  }, [id, selectedPhase]);
 
   function getChildren(parentId: string): BomItem[] {
     return items.filter(i => i.parentId === parentId);
@@ -82,6 +106,7 @@ export default function BomPage() {
       id: generateId(), projectId: id, parentId,
       category: 'structure', name: '', description: '', isMold: false,
       quantity: 1, unitCost: 0, totalCost: 0,
+      phase: selectedPhase, lockedAt: 0,
     };
     await db.bomItems.put(item);
     setItems([...items, item]);
@@ -108,10 +133,11 @@ export default function BomPage() {
   }
 
   function handleDownloadTemplate() {
-    downloadTemplate('BOM物料清单模板', ['父级编号(空则为顶级)', '类别', '料号', '名称', '描述', '是否开模(是/否)', '数量', '单项成本', '供应商', '备注'], [
-      ['', '结构', 'P001', '面板组件', 'ABS注塑面板总成', '否', '1', '50', '', ''],
-      ['P001', '结构', 'P001-1', '面板注塑件', 'ABS 米白色 168*100*15.5mm', '是', '1', '30', '哆乐', ''],
-      ['P001', '结构', 'P001-2', '面板网布', '黑色不织布', '否', '1', '5', '', ''],
+    const phaseLabel = PHASE_LABELS[selectedPhase];
+    downloadTemplate('BOM物料清单模板', ['父级编号(空则为顶级)', '类别', '料号', '名称', '描述', '是否开模(是/否)', '数量', '单项成本', '供应商', '备注', '阶段'], [
+      ['', '结构', 'P001', '面板组件', 'ABS注塑面板总成', '否', '1', '50', '', '', phaseLabel],
+      ['P001', '结构', 'P001-1', '面板注塑件', 'ABS 米白色 168*100*15.5mm', '是', '1', '30', '哆乐', '', phaseLabel],
+      ['P001', '结构', 'P001-2', '面板网布', '黑色不织布', '否', '1', '5', '', '', phaseLabel],
     ]);
   }
 
@@ -120,6 +146,7 @@ export default function BomPage() {
     if (!file) return;
     const rows = await parseExcelFile(file);
     const catMap: Record<string, string> = { '结构': 'structure', '硬件': 'hardware', '包装': 'packaging' };
+    const phaseMap: Record<string, Phase> = { '概念阶段': 'concept', '设计阶段': 'design', 'HMS 手板阶段': 'hms', 'EVT 工程验证': 'evt', 'DVT 设计验证': 'dvt', 'PVT 生产验证': 'pvt', 'MP 量产': 'mp' };
     const newItems: BomItem[] = rows.map(row => ({
       id: generateId(), projectId: id,
       parentId: row['父级编号(空则为顶级)'] || undefined,
@@ -134,9 +161,11 @@ export default function BomPage() {
       totalCost: (Number(row['数量']) || 1) * (Number(row['单项成本']) || 0),
       supplier: row['供应商'] || undefined,
       notes: row['备注'] || undefined,
+      phase: (phaseMap[row['阶段']] || selectedPhase) as Phase,
+      lockedAt: 0,
     }));
     await db.bomItems.bulkAdd(newItems);
-    db.bomItems.where('projectId').equals(id).toArray().then(setItems);
+    db.bomItems.where({ projectId: id, phase: selectedPhase }).toArray().then(setItems);
   }
 
   const flatTree = items.length > 0 ? flattenBomTree(items, undefined, 0, collapsed, []) : [];
@@ -165,7 +194,7 @@ export default function BomPage() {
             <div className="text-lg font-bold text-emerald-700 mt-0.5">{moldCount}</div>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-3 border-l-2 border-l-amber-300">
-            <div className="text-[11px] text-gray-500">单台 BOM 成本</div>
+            <div className="text-[11px] text-gray-500">{PHASE_LABELS[selectedPhase]} 单台 BOM 成本</div>
             <div className="text-lg font-bold text-amber-700 mt-0.5">¥{totalBomCost.toLocaleString()}</div>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-3 border-l-2 border-l-violet-300">
@@ -186,6 +215,35 @@ export default function BomPage() {
           </div>
         )}
 
+        {/* Phase tabs */}
+        <div className="flex items-center gap-1 mb-4 overflow-x-auto">
+          {PHASES.map(ph => (
+            <button key={ph.key} onClick={() => setSelectedPhase(ph.key)}
+              className={`text-xs px-3 py-1.5 rounded whitespace-nowrap transition-colors ${selectedPhase === ph.key ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+              {ph.label}
+            </button>
+          ))}
+          {nextPhase && (
+            <button
+              onClick={() => setAdvanceDialog({ open: true, targetPhase: nextPhase.key })}
+              className="text-xs px-3 py-1.5 rounded whitespace-nowrap bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors border border-indigo-200 ml-3"
+            >
+              → {nextPhase.label}
+            </button>
+          )}
+        </div>
+
+        {/* Advance dialog */}
+        <ConfirmDialog
+          open={advanceDialog?.open ?? false}
+          title="推进到下一阶段"
+          message={`是否将当前「${PHASE_LABELS[selectedPhase]}」的 ${items.length} 条 BOM 复制到「${advanceDialog?.targetPhase ? PHASE_LABELS[advanceDialog.targetPhase] : ''}」作为起点？选择"是"复制全部 BOM，新阶段继续编辑。选择"否"新阶段从空白开始，原阶段 BOM 保留不变。`}
+          confirmLabel="是，复制"
+          variant="primary"
+          onConfirm={() => handleAdvance(true)}
+          onCancel={() => { setAdvanceDialog(null); if (advanceDialog) setSelectedPhase(advanceDialog.targetPhase); }}
+        />
+
         {/* Actions bar */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -204,6 +262,12 @@ export default function BomPage() {
               <button onClick={() => { setSelectionMode(!selectionMode); setSelectedIds(new Set()); }}
                 className={`text-xs px-2.5 py-1.5 rounded border ${selectionMode ? 'bg-blue-50 border-blue-300 text-blue-600' : 'border-gray-200 text-gray-400 hover:text-gray-700'}`}>
                 {selectionMode ? '退出选择' : '批量操作'}
+              </button>
+            )}
+            {selectionMode && (
+              <button onClick={() => setSelectedIds(new Set(items.map(i => i.id)))}
+                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50">
+                全选 ({items.length})
               </button>
             )}
             {selectionMode && selectedIds.size > 0 && (

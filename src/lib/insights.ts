@@ -22,12 +22,15 @@ export async function collectProjectData(projectId: string): Promise<PreCheckRes
   const project = await db.projects.get(projectId);
   if (!project) return null;
 
-  const [tasks, milestones, mils, bomItems] = await Promise.all([
+  const [tasks, milestones, mils, proj, allBomItems] = await Promise.all([
     db.tasks.where('projectId').equals(projectId).toArray(),
     db.milestones.where('projectId').equals(projectId).toArray(),
     db.milEntries.where('projectId').equals(projectId).toArray(),
+    db.projects.get(projectId),
     db.bomItems.where('projectId').equals(projectId).toArray(),
   ]);
+  const currentPhase = proj?.phase || 'evt';
+  const bomItems = allBomItems.filter(item => item.phase === currentPhase);
 
   const now = Date.now();
   const msPerDay = 86400000;

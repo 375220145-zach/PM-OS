@@ -54,6 +54,34 @@ export class PmOsDB extends Dexie {
       extractionMeta: 'id, sourceId, sourceType',
       kbImages: 'id, nodeId',
     });
+    this.version(5).stores({
+      projects: 'id, name, status, phase, createdAt',
+      milestones: 'id, projectId, order',
+      tasks: 'id, projectId, phase, status, assignee',
+      meetings: 'id, projectId, date',
+      retrospectives: 'id, projectId, phase',
+      changeRecords: 'id, projectId, createdAt',
+      bomItems: 'id, projectId, category, phase, [projectId+phase]',
+      procurementCandidates: 'id, projectId',
+      certRequirements: 'id, projectId, market',
+      milEntries: 'id, projectId, status, severity',
+      workLogs: 'id, projectId, createdAt',
+      graphNodes: 'id, entityType, source, normalizedLabel, [entityType+normalizedLabel]',
+      graphEdges: 'id, sourceId, targetId, relation, [sourceId+relation], [targetId+relation]',
+      extractionMeta: 'id, sourceId, sourceType',
+      kbImages: 'id, nodeId',
+    }).upgrade(async tx => {
+      const bomItems = await tx.table('bomItems').toArray() as Array<{ id: string; projectId: string; phase?: string; lockedAt?: number; lockedBy?: string }>;
+      const projects = await tx.table('projects').toArray() as Array<{ id: string; phase: string }>;
+      const phaseByProject = new Map(projects.map(p => [p.id, p.phase]));
+      for (const item of bomItems) {
+        await tx.table('bomItems').update(item.id, {
+          phase: item.phase || phaseByProject.get(item.projectId) || 'evt',
+          lockedAt: item.lockedAt || 0,
+          lockedBy: item.lockedBy || undefined,
+        });
+      }
+    });
   }
 }
 

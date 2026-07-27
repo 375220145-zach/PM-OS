@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import type { Project, BudgetItem, BudgetCategory } from '@/types';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import type { Project, BudgetItem, BudgetCategory, Phase } from '@/types';
 import { db } from '@/db/database';
+import { PHASES, PHASE_LABELS } from '@/lib/ipd';
 import AppShell from '@/components/layout/AppShell';
 import ProjectHeader from '@/components/layout/ProjectHeader';
 import Button from '@/components/shared/Button';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import EmptyState from '@/components/shared/EmptyState';
 import { downloadTemplate, parseExcelFile, pickFile } from '@/lib/excel';
 
@@ -21,27 +23,65 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function BudgetPage() {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id as string;
   const [project, setProject] = useState<Project | null>(null);
+  const [projectPhase, setProjectPhase] = useState<Phase>('evt');
+  const selectedPhase = (searchParams.get('phase') as Phase) || projectPhase;
   const [budget, setBudget] = useState<(BudgetItem & { otherLabel?: string })[]>([]);
   const [editing, setEditing] = useState(false);
+  const [advanceDialog, setAdvanceDialog] = useState(false);
+  function setSelectedPhase(p: Phase) { router.push(`/project/${id}/budget?phase=${p}`, { scroll: false }); }
+  const currentIdx = PHASES.findIndex(p => p.key === selectedPhase);
+  const nextPhase = currentIdx < PHASES.length - 1 ? PHASES[currentIdx + 1] : null;
+
+  async function handleAdvance(copy: boolean) {
+    if (!nextPhase) return;
+    setAdvanceDialog(false);
+    const projId = id;
+    if (copy) {
+      const copies = budget.map(({ otherLabel, ...b }) => ({ ...b, phase: nextPhase.key }));
+      if (copies.length > 0) {
+        const fresh = await db.projects.get(projId);
+        const merged = [...(fresh?.budget ?? []), ...copies];
+        await db.projects.update(projId, { budget: merged, updatedAt: Date.now() });
+      }
+    }
+    setSelectedPhase(nextPhase.key);
+  }
+
+  async function handleAdvanceSkip() {
+    if (!nextPhase) return;
+    setAdvanceDialog(false);
+    setSelectedPhase(nextPhase.key);
+  }
 
   useEffect(() => {
     db.projects.get(id).then(p => {
       setProject(p ?? null);
-      setBudget((p?.budget ?? []).map(b => ({ ...b, otherLabel: '' })));
+      if (p) { setProjectPhase(p.phase); if (!searchParams.get('phase')) setSelectedPhase(p.phase); }
+      // Filter budget items by selected phase, migrate items without phase
+      const allBudget = (p?.budget ?? []).map(b => ({ ...b, phase: (b as BudgetItem & { phase?: Phase }).phase || (p?.phase || 'evt') }));
+      setBudget(allBudget.filter(b => b.phase === selectedPhase).map(b => ({ ...b, otherLabel: '' })));
     });
-  }, [id]);
+  }, [id, selectedPhase]);
 
   async function save() {
-    if (!project) return;
-    const clean = budget.map(({ otherLabel, ...b }) => b);
-    await db.projects.update(id, { budget: clean, updatedAt: Date.now() });
+    const fresh = await db.projects.get(id);
+    if (!fresh) return;
+    const clean = budget.map(({ otherLabel, ...b }) => ({ ...b, phase: selectedPhase }));
+    const otherPhases = (fresh.budget ?? []).filter(b => (b as BudgetItem & { phase?: Phase }).phase !== selectedPhase);
+    await db.projects.update(id, { budget: [...otherPhases, ...clean], updatedAt: Date.now() });
+    setProject(fresh);
     setEditing(false);
   }
 
   function addItem() {
-    setBudget([...budget, { category: 'mold', name: '', estimated: 0, actual: 0, otherLabel: '' }]);
+    // Don't add if there's already an empty unedited row
+    const hasEmpty = budget.some(b => !b.name.trim() && b.estimated === 0 && b.actual === 0);
+    if (hasEmpty) return;
+    setBudget([...budget, { category: 'mold', name: '', estimated: 0, actual: 0, phase: selectedPhase, otherLabel: '' }]);
     setEditing(true);
   }
 
@@ -56,9 +96,10 @@ export default function BudgetPage() {
   }
 
   function handleDownloadTemplate() {
-    downloadTemplate('项目成本模板', ['类别', '项目', '预估费用', '实际费用', '其他说明'], [
-      ['模具费', '面板模具', '30000', '0', ''],
-      ['人力成本', '结构工程师', '50000', '0', ''],
+    const phaseLabel = PHASE_LABELS[selectedPhase];
+    downloadTemplate('项目成本模板', ['类别', '项目', '预估费用', '实际费用', '其他说明', '阶段'], [
+      ['模具费', '面板模具', '30000', '0', '', phaseLabel],
+      ['人力成本', '结构工程师', '50000', '0', '', phaseLabel],
     ]);
   }
 
@@ -73,30 +114,33 @@ export default function BudgetPage() {
       name: row['项目'] || (row['其他说明'] || ''),
       estimated: Number(row['预估费用']) || 0,
       actual: Number(row['实际费用']) || 0,
+      phase: selectedPhase,
     }));
     const merged = [...budget.map(({ otherLabel, ...b }) => b), ...newItems];
     setBudget(merged.map(b => ({ ...b, otherLabel: '' })));
     setEditing(true);
-    await db.projects.update(id, { budget: merged, updatedAt: Date.now() });
+    const fresh = await db.projects.get(id);
+    const otherPhases = (fresh?.budget ?? []).filter(b => (b as BudgetItem & { phase?: Phase }).phase !== selectedPhase);
+    await db.projects.update(id, { budget: [...otherPhases, ...newItems.map(b => ({ ...b, phase: selectedPhase }))], updatedAt: Date.now() });
     setEditing(false);
   }
 
   const totalEst = budget.reduce((s, i) => s + i.estimated, 0);
   const totalAct = budget.reduce((s, i) => s + i.actual, 0);
 
-  // Auto-aggregate BOM total cost (单台 × MP 量产数量)
+  // Auto-aggregate BOM total cost (follow selected phase)
   const [bomTotalCost, setBomTotalCost] = useState(0);
   const [mpQuantity, setMpQuantity] = useState(0);
   useEffect(() => {
-    db.bomItems.where('projectId').equals(id).toArray().then(items => {
-      const unitBomCost = items.reduce((s, i) => s + (i.totalCost || 0), 0);
-      db.projects.get(id).then(p => {
-        const mp = p?.goals?.mpQuantity ?? 0;
-        setMpQuantity(mp);
-        setBomTotalCost(unitBomCost * (mp > 0 ? mp : 1));  // mpQuantity=0 时视为 1（单台）
-      });
-    });
+    db.projects.get(id).then(p => { setMpQuantity(p?.goals?.mpQuantity ?? 0); });
   }, [id]);
+  useEffect(() => {
+    db.bomItems.where({ projectId: id, phase: selectedPhase }).toArray().then(items => {
+      const unitBomCost = items.reduce((s, i) => s + (i.totalCost || 0), 0);
+      const mp = mpQuantity > 0 ? mpQuantity : 1;
+      setBomTotalCost(unitBomCost * mp);
+    });
+  }, [id, selectedPhase, mpQuantity]);
 
   // Compute category totals for chart
   const catTotals: Record<string, number> = {};
@@ -105,7 +149,7 @@ export default function BudgetPage() {
     catTotals[key] = (catTotals[key] || 0) + b.estimated;
   });
   if (bomTotalCost > 0) {
-    catTotals['BOM物料'] = bomTotalCost;
+    catTotals[`BOM (${PHASE_LABELS[selectedPhase]})`] = bomTotalCost;
   }
   const maxCat = Math.max(...Object.values(catTotals), 1);
 
@@ -113,13 +157,29 @@ export default function BudgetPage() {
     <AppShell>
       <ProjectHeader projectId={id} />
       <div className="p-4 md:p-6">
+        {/* Phase tabs */}
+        <div className="flex items-center gap-1 mb-4 overflow-x-auto">
+          {PHASES.map(ph => (
+            <button key={ph.key} onClick={() => setSelectedPhase(ph.key)}
+              className={`text-xs px-3 py-1.5 rounded whitespace-nowrap transition-colors ${selectedPhase === ph.key ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+              {ph.label}
+            </button>
+          ))}
+          {nextPhase && (
+            <button onClick={() => setAdvanceDialog(true)}
+              className="text-xs px-3 py-1.5 rounded whitespace-nowrap bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors border border-indigo-200 ml-3">
+              → {nextPhase.label}
+            </button>
+          )}
+        </div>
+
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900">成本管理</h2>
             <div className="flex gap-4 mt-1 text-sm text-gray-500">
               <span>预估: ¥{totalEst.toLocaleString()}</span>
               <span>实际: ¥{totalAct.toLocaleString()}</span>
-              {bomTotalCost > 0 && <span className="text-blue-600">BOM: ¥{bomTotalCost.toLocaleString()}</span>}
+              {bomTotalCost > 0 && <span className="text-blue-600">BOM({PHASE_LABELS[selectedPhase]}): ¥{bomTotalCost.toLocaleString()}</span>}
               {totalEst > 0 && <span className={totalAct > totalEst ? 'text-red-600' : 'text-emerald-600'}>偏差: {((totalAct - totalEst) / totalEst * 100).toFixed(1)}%</span>}
             </div>
           </div>
@@ -237,6 +297,15 @@ export default function BudgetPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={advanceDialog}
+        title="推进到下一阶段"
+        message={`是否将当前「${PHASE_LABELS[selectedPhase]}」的 ${budget.filter(b => b.name.trim() || b.estimated > 0 || b.actual > 0).length} 条预算复制到「${nextPhase?.label ?? ''}」？选择"是"复制，选择"否"空白开始。`}
+        confirmLabel="是，复制"
+        variant="primary"
+        onConfirm={() => handleAdvance(true)}
+        onCancel={handleAdvanceSkip}
+      />
     </AppShell>
   );
 }

@@ -65,6 +65,7 @@ export interface BudgetItem {
   name: string;
   estimated: number;
   actual: number;
+  phase: Phase;
 }
 
 export interface Project {
@@ -185,18 +186,21 @@ export interface ChangeRecord {
 export interface BomItem {
   id: string;
   projectId: string;
-  parentId?: string;            // 父级 BOM ID，用于层级展开
+  parentId?: string;
   category: 'structure' | 'hardware' | 'packaging' | 'other';
   partNumber?: string;
   name: string;
   description: string;
-  requirement?: string;         // 需求梳理
+  requirement?: string;
   isMold: boolean;
-  quantity: number;             // 数量
-  unitCost: number;             // 单项成本
-  totalCost: number;            // 数量 × 单项成本，自动核算
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
   supplier?: string;
   notes?: string;
+  phase: Phase;                 // IPD 阶段，每个阶段独立存一条
+  lockedAt: number;             // 阶段锁定时间戳，0=未锁定
+  lockedBy?: string;            // 锁定操作人
 }
 
 export interface ProcurementCandidate {
