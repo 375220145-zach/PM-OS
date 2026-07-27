@@ -27,6 +27,7 @@ const GLOBAL_LINKS: NavItem[] = [
   { href: '/my-tasks', label: '我的待办', icon: 'clipboard-list' },
   { href: '/work-logs', label: '工作记录', icon: 'notebook' },
   { href: '/weekly-report', label: '周报', icon: 'file-text' },
+  { href: '/kb', label: '知识库', icon: 'brain' },
 ];
 
 const MODULE_GROUPS: ModuleGroup[] = [

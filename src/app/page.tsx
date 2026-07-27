@@ -12,10 +12,12 @@ import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import Icon from '@/components/shared/Icon';
 import { NonDemoOnly } from '@/components/shared/DemoGuard';
 import AIInsightsCard from '@/components/dashboard/AIInsightsCard';
-import { collectProjectData } from '@/lib/insights';
+import { collectProjectDataWithGraph } from '@/lib/insights';
 import AnimatedNumber from '@/components/shared/AnimatedNumber';
 import { isDemoMode } from '@/lib/demo-data';
 import { addDays } from '@/lib/utils';
+import RungWaterfall from '@/components/charts/RungWaterfall';
+import TickGauge from '@/components/charts/TickGauge';
 
 function loadProjects(): Promise<Project[]> {
   return db.projects.toArray().then(arr => arr.sort((a, b) => b.updatedAt - a.updatedAt));
@@ -37,8 +39,6 @@ export default function HomePage() {
 
   const [, setTick] = useState(0);
   const staggerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<HTMLDivElement>(null);
-  const ringRef = useRef<SVGCircleElement>(null);
 
   useEffect(() => {
     Promise.all([loadProjects(), db.tasks.toArray(), db.milestones.toArray(), db.milEntries.toArray()])
@@ -134,7 +134,6 @@ export default function HomePage() {
     });
     return buckets.filter(b => b.count > 0);
   }, [overdueTasks, now]);
-  const maxAging = Math.max(...aging.map(b => b.count), 1);
 
   // --- This week's key dates ---
   const thisWeekEntries = useMemo((): TimeEntry[] => {
@@ -184,29 +183,6 @@ export default function HomePage() {
     });
     return () => ctx.revert();
   }, [loading]);
-
-  useEffect(() => {
-    if (loading || aging.length === 0) return;
-    const ctx = gsap.context(() => {
-      const bars = chartRef.current?.querySelectorAll('.aging-bar');
-      if (bars && bars.length > 0)
-        gsap.fromTo(bars, { scaleX: 0, transformOrigin: 'left center' }, { scaleX: 1, stagger: 0.08, duration: 0.5, ease: 'power2.out' });
-    });
-    return () => ctx.revert();
-  }, [loading, aging]);
-
-  // GSAP ring animation
-  useEffect(() => {
-    if (loading) return;
-    const ctx = gsap.context(() => {
-      const ring = ringRef.current;
-      if (ring) {
-        const circumference = 2 * Math.PI * 54;
-        gsap.fromTo(ring, { strokeDashoffset: circumference }, { strokeDashoffset: circumference * (1 - onTimeStats.overallRate / 100), duration: 1.2, ease: 'power2.out' });
-      }
-    });
-    return () => ctx.revert();
-  }, [loading, onTimeStats.overallRate]);
 
   if (loading) {
     return (
@@ -261,57 +237,21 @@ export default function HomePage() {
         {/* Overdue Aging + On-time Rate */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {/* Overdue Aging */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-5">逾期老化分布</h2>
-            {aging.length === 0 ? (
-              <div className="text-sm text-gray-400 py-8 text-center">没有逾期任务</div>
-            ) : (
-              <div ref={chartRef} className="space-y-3">
-                {aging.map(b => (
-                  <div key={b.label}>
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span className="text-gray-600">{b.label}</span>
-                      <span className={`font-semibold ${b.min>=8?'text-red-600':b.min>=4?'text-amber-600':'text-gray-600'}`}>{b.count} 个</span>
-                    </div>
-                    <div className="h-6 bg-gray-100 rounded-md overflow-hidden">
-                      <div className="aging-bar h-full rounded-md" style={{ width:`${(b.count/maxAging)*100}%`, backgroundColor: b.min>=8?'#ef4444':b.min>=4?'#f59e0b':'#6366f1', minWidth: b.count>0?'24px':'0' }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">逾期老化分布</h2>
+            <RungWaterfall total={overdueTasks.length} buckets={aging} />
           </div>
 
-          {/* On-time Completion Rate Ring */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-5">准时完成率</h2>
-            <div className="flex items-center gap-6">
-              {/* Donut ring */}
-              <div className="relative w-32 h-32 shrink-0">
-                <svg viewBox="0 0 128 128" className="w-full h-full -rotate-90">
-                  <circle cx="64" cy="64" r="54" fill="none" stroke="#f1f5f9" strokeWidth="12" />
-                  <circle ref={ringRef} cx="64" cy="64" r="54" fill="none" stroke={onTimeStats.overallRate >= 80 ? '#059669' : onTimeStats.overallRate >= 60 ? '#d97706' : '#dc2626'} strokeWidth="12" strokeLinecap="round"
-                    strokeDasharray={`${2*Math.PI*54}`} strokeDashoffset={`${2*Math.PI*54}`} />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className={`text-2xl font-bold ${onTimeStats.overallRate>=80?'text-emerald-600':onTimeStats.overallRate>=60?'text-amber-600':'text-red-600'}`}>{onTimeStats.overallRate}%</span>
-                </div>
-              </div>
-              {/* Detail */}
-              <div className="text-sm space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-gray-600">任务：{onTimeStats.taskOnTime}/{onTimeStats.taskTotal} 准时</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                  <span className="text-gray-600">里程碑：{onTimeStats.msOnTime}/{onTimeStats.msTotal} 准时</span>
-                </div>
-                {onTimeStats.taskTotal > 0 && onTimeStats.taskRate < 100 && (
-                  <div className="text-xs text-gray-400 mt-1">{onTimeStats.taskTotal - onTimeStats.taskOnTime} 个任务逾期完成</div>
-                )}
-              </div>
-            </div>
+          {/* On-time Completion Rate */}
+          <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">准时完成率</h2>
+            <TickGauge
+              rate={onTimeStats.overallRate}
+              details={[
+                { label: '任务', onTime: onTimeStats.taskOnTime, total: onTimeStats.taskTotal },
+                { label: '里程碑', onTime: onTimeStats.msOnTime, total: onTimeStats.msTotal },
+              ]}
+            />
           </div>
         </div>
 
@@ -377,12 +317,12 @@ export default function HomePage() {
           onRunAnalysis={async () => {
             if (activeProjects.length === 0) return null;
             const pid = selectedProjectId || activeProjects[0].id;
-            const data = await collectProjectData(pid);
+            const data = await collectProjectDataWithGraph(pid);
             if (!data) return null;
             const [riskRes, costRes, scheduleRes] = await Promise.all([
-              fetch('/api/ai/risk', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data: JSON.stringify(data) }) }).then(r=>r.json()).catch(()=>null),
-              fetch('/api/ai/cost', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data: JSON.stringify(data) }) }).then(r=>r.json()).catch(()=>null),
-              fetch('/api/ai/schedule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data: JSON.stringify(data) }) }).then(r=>r.json()).catch(()=>null),
+              fetch('/api/ai/risk', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).then(r=>r.json()).catch(()=>null),
+              fetch('/api/ai/cost', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).then(r=>r.json()).catch(()=>null),
+              fetch('/api/ai/schedule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).then(r=>r.json()).catch(()=>null),
             ]);
             return { risk: riskRes, cost: costRes, schedule: scheduleRes };
           }}
@@ -401,16 +341,13 @@ export default function HomePage() {
 function AlertCard({ label, count, color, icon, sub, onClick }: {
   label: string; count: number; color: 'red' | 'amber' | 'blue'; icon: 'alert-triangle' | 'calendar'; sub?: string; onClick: () => void;
 }) {
-  const b = { red: 'border-l-red-500 hover:border-l-red-600', amber: 'border-l-amber-500 hover:border-l-amber-600', blue: 'border-l-indigo-500 hover:border-l-indigo-600' };
-  const t = { red: 'text-red-600', amber: 'text-amber-600', blue: 'text-indigo-600' };
-  const bg = { red: 'bg-red-50', amber: 'bg-amber-50', blue: 'bg-indigo-50' };
   return (
-    <button onClick={onClick} data-stagger className={`bg-white border border-gray-200 border-l-[3px] rounded-xl p-4 text-left transition-all hover:shadow-md ${b[color]}`}>
+    <button onClick={onClick} data-stagger className="bg-white border border-gray-200 rounded-xl p-4 text-left transition-all hover:shadow-md">
       <div className="flex items-center gap-2 mb-2">
-        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full ${bg[color]}`}><Icon name={icon} size={14} stroke={2} className={t[color]} /></span>
+        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100"><Icon name={icon} size={14} stroke={2} className="text-gray-500" /></span>
         <span className="text-xs text-gray-500 font-medium">{label}</span>
       </div>
-      <div className={`text-2xl font-bold ${t[color]}`}><AnimatedNumber value={count} duration={0.6} /></div>
+      <div className="text-2xl font-bold text-gray-900"><AnimatedNumber value={count} duration={0.6} /></div>
       {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
     </button>
   );

@@ -274,3 +274,83 @@ export interface ProjectSnapshot {
   milEntries: MILEntry[];
   workLogs: WorkLogEntry[];
 }
+
+// ===== Knowledge Graph Types =====
+
+export type GraphEntityType = 'material' | 'supplier' | 'risk_type' | 'milestone' | 'project' | 'member' | 'concept' | 'category';
+
+export type GraphRelationType = 'supplied_by' | 'belongs_to' | 'used_in' | 'has_risk' | 'alternative' | 'depends_on' | 'assigned_to' | 'has_image';
+
+export type GraphSourceType = 'kb' | 'proj';
+
+export interface GraphNode {
+  id: string;            // {source}--{entityType}--{normalizedLabel}
+  entityType: GraphEntityType;
+  source: GraphSourceType;
+  projectId?: string;    // only for proj source
+  label: string;
+  normalizedLabel: string;
+  properties: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface GraphEdge {
+  id: string;
+  sourceId: string;      // GraphNode.id
+  targetId: string;      // GraphNode.id
+  relation: GraphRelationType;
+  projectId?: string;    // which project this edge was extracted from
+  weight: number;        // default 1
+  properties: Record<string, unknown>;
+  createdAt: number;
+}
+
+export interface GraphData {
+  nodes: Map<string, GraphNode>;
+  edges: GraphEdge[];
+  adjacencyList: Map<string, string[]>;  // nodeId → connected nodeIds
+}
+
+export interface ExtractionMeta {
+  id: string;
+  sourceId: string;      // projectId or 'kb-excel'
+  sourceType: GraphSourceType;
+  lastExtractedAt: number;
+  lastSourceUpdatedAt: number;
+  nodeCount: number;
+  edgeCount: number;
+}
+
+export interface CrossProjectInsight {
+  entityLabel: string;
+  entityType: GraphEntityType;
+  relatedProjects: string[];
+  pattern: string;
+  severity: 'info' | 'warning' | 'critical';
+}
+
+export interface GraphContext {
+  crossProjectEntities: {
+    entityType: string;
+    label: string;
+    sourceProjectIds: string[];
+    relevance: string;
+  }[];
+  relatedNodes: {
+    nodeId: string;
+    label: string;
+    entityType: string;
+    relation: string;
+    distance: number;
+  }[];
+  summary: string;
+}
+
+export interface KbImageRecord {
+  id: string;
+  nodeId: string;
+  base64: string;
+  mimeType: string;
+  createdAt: number;
+}

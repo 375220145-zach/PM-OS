@@ -84,7 +84,6 @@ export default function AIInsightsCard({ onRunAnalysis, isDemo }: Props) {
     }
   }, [onRunAnalysis]);
 
-  // Demo mode: show static data
   const displayResult = isDemo ? DEMO_INSIGHTS : result;
 
   const tabs: { key: TabKey; label: string; count?: number }[] = [
@@ -116,21 +115,19 @@ export default function AIInsightsCard({ onRunAnalysis, isDemo }: Props) {
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm border-l-[3px] border-l-indigo-500">
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <Icon name="sparkles" size={18} stroke={1.5} className="text-indigo-500" />
+          <Icon name="sparkles" size={18} stroke={1.5} className="text-gray-500" />
           <h2 className="text-sm font-semibold text-gray-900">AI 洞察</h2>
           {isDemo && (
             <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Demo 示例</span>
           )}
         </div>
-        {!isDemo && (
-          <Button size="sm" onClick={handleRun} disabled={loading}>
-            {loading ? '分析中...' : '运行分析'}
-          </Button>
-        )}
+        <Button size="sm" onClick={handleRun} disabled={loading}>
+          {loading ? '分析中...' : '运行分析'}
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -141,14 +138,14 @@ export default function AIInsightsCard({ onRunAnalysis, isDemo }: Props) {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px] ${
               activeTab === tab.key
-                ? 'border-indigo-600 text-indigo-700'
+                ? 'border-gray-800 text-gray-900'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
             {tab.label}
             {tab.count !== undefined && tab.count > 0 && (
               <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
-                activeTab === tab.key ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500'
+                activeTab === tab.key ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-500'
               }`}>
                 {tab.count}
               </span>
@@ -163,15 +160,9 @@ export default function AIInsightsCard({ onRunAnalysis, isDemo }: Props) {
           <div className="text-sm text-red-600 bg-red-50 rounded-lg p-3 mb-3">{error}</div>
         )}
 
-        {isDemo && (
-          <div className="text-xs text-gray-400 mb-4 bg-gray-50 rounded-lg px-3 py-2">
-            完整版部署到 Vercel 后可体验实时 AI 分析功能
-          </div>
-        )}
-
         {!displayResult && !loading && (
           <div className="text-center py-8 text-gray-500 text-sm">
-            {isDemo ? 'Demo 模式下展示静态示例数据' : '点击「运行分析」获取 AI 洞察'}
+            点击「运行分析」获取 AI 洞察
           </div>
         )}
 
