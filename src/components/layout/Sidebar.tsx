@@ -189,7 +189,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               {!isGroupCollapsed && (
                 <div className="mt-0.5 space-y-0.5">
                   {group.items.map(item => {
-                    const fullHref = `/project/${projectId}${item.href}`;
+                    const fullHref = `/project${item.href || ''}?p=${projectId}`;
                     const isActive = pathname === fullHref || (item.href !== '' && pathname.startsWith(fullHref + '/'));
                     return (
                       <Link

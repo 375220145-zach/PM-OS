@@ -33,7 +33,7 @@ export default function ProjectCard({ project, onDelete }: Props) {
 
   return (
     <div className="relative group bg-white border border-gray-200 hover:border-gray-300 rounded-xl transition-colors">
-      <Link href={`/project/${project.id}`} className="block p-6">
+      <Link href={`/project?p=${project.id}`} className="block p-6">
         <div className="flex items-start justify-between mb-3">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-1">{project.name}</h3>

@@ -330,7 +330,7 @@ export default function HomePage() {
         />
 
         <ProjectForm open={showForm} onClose={() => setShowForm(false)}
-          onCreated={(id) => { setShowForm(false); router.push(`/project/${id}`); }} />
+          onCreated={(id) => { setShowForm(false); router.push(`/project?p=${id}`); }} />
         <ConfirmDialog open={!!deleteTarget} title="删除项目"
           message={`确定要删除「${deleteTarget?.name}」吗？所有关联数据将被永久删除。`}
           confirmLabel="确认删除" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />

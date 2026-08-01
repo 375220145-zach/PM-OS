@@ -89,7 +89,7 @@ export default function ProjectsPage() {
             <div ref={gridRef} className="grid grid-cols-2 gap-4 mb-8">
               {activeProjects.map(p => (
                 <div key={p.id} data-stagger className="relative group bg-white border border-gray-200 hover:border-gray-300 rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-md">
-                  <div onClick={() => router.push(`/project/${p.id}`)} className="block p-5 cursor-pointer">
+                  <div onClick={() => router.push(`/project?p=${p.id}`)} className="block p-5 cursor-pointer">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${projectHealth(p) === 'red' ? 'bg-red-500' : 'bg-green-500'}`} />
@@ -120,7 +120,7 @@ export default function ProjectsPage() {
             <div className="grid grid-cols-2 gap-4 opacity-60 hover:opacity-80 transition-opacity">
               {[...archivedProjects, ...terminatedProjects].map(p => (
                 <div key={p.id} data-stagger className="relative group bg-white border border-gray-200 hover:border-gray-300 rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-md">
-                  <div onClick={() => router.push(`/project/${p.id}`)} className="block p-5 cursor-pointer">
+                  <div onClick={() => router.push(`/project?p=${p.id}`)} className="block p-5 cursor-pointer">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className={`text-xs px-1.5 py-0.5 rounded ${p.status === 'archived' ? 'bg-gray-200 text-gray-600' : 'bg-red-100 text-red-700'}`}>
@@ -152,7 +152,7 @@ export default function ProjectsPage() {
         )}
 
         <ProjectForm open={showForm} onClose={() => setShowForm(false)}
-          onCreated={(id) => { setShowForm(false); router.push(`/project/${id}`); }} />
+          onCreated={(id) => { setShowForm(false); router.push(`/project?p=${id}`); }} />
         <ConfirmDialog open={!!deleteTarget} title="删除项目"
           message={`确定要删除「${deleteTarget?.name}」吗？所有关联数据将被永久删除。`}
           confirmLabel="确认删除" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
