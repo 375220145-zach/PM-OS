@@ -9,6 +9,7 @@ import ProjectHeader from '@/components/layout/ProjectHeader';
 import Button from '@/components/shared/Button';
 import { formatDate } from '@/lib/utils';
 import { PHASES } from '@/lib/ipd';
+import { aiAnalyzeWorkLogs } from '@/lib/ai-remote';
 
 export default function RetroReportPage() {
   const params = useParams();
@@ -60,16 +61,7 @@ export default function RetroReportPage() {
     if (logs.length === 0) return;
     setAnalyzing(true);
     try {
-      const res = await fetch('/api/ai/analyze-work-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          logs: logs.map(l => l.items ?? []),
-          projectName: project?.name ?? '',
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      const data = (await aiAnalyzeWorkLogs(logs.map(l => l.items ?? []), project?.name ?? '')) as unknown as { summary?: string };
       setAiAnalysis(data.summary ?? JSON.stringify(data));
     } catch {
       setAiAnalysis(null);

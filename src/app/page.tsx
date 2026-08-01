@@ -11,8 +11,9 @@ import Button from '@/components/shared/Button';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import Icon from '@/components/shared/Icon';
 import { NonDemoOnly } from '@/components/shared/DemoGuard';
-import AIInsightsCard from '@/components/dashboard/AIInsightsCard';
+import AIInsightsCard, { type InsightsResult } from '@/components/dashboard/AIInsightsCard';
 import { collectProjectDataWithGraph } from '@/lib/insights';
+import { aiRisk, aiCost, aiSchedule } from '@/lib/ai-remote';
 import AnimatedNumber from '@/components/shared/AnimatedNumber';
 import { isDemoMode } from '@/lib/demo-data';
 import { addDays } from '@/lib/utils';
@@ -320,11 +321,11 @@ export default function HomePage() {
             const data = await collectProjectDataWithGraph(selectedProjectId);
             if (!data) return null;
             const [riskRes, costRes, scheduleRes] = await Promise.all([
-              fetch('/api/ai/risk', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).then(r=>r.json()).catch(()=>null),
-              fetch('/api/ai/cost', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).then(r=>r.json()).catch(()=>null),
-              fetch('/api/ai/schedule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).then(r=>r.json()).catch(()=>null),
+              aiRisk(data).catch(() => null),
+              aiCost(data).catch(() => null),
+              aiSchedule(data).catch(() => null),
             ]);
-            return { risk: riskRes, cost: costRes, schedule: scheduleRes };
+            return { risk: riskRes, cost: costRes, schedule: scheduleRes } as unknown as InsightsResult;
           }}
         />
 

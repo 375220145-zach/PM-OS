@@ -1,4 +1,11 @@
 name = "pm-os"
 compatibility_date = "2025-06-05"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = ".vercel/output/static"
+pages_build_output_dir = "out"
+
+# Pages Functions（/functions）用 D1——生产版数据同步 + AI 转发同域（pages.dev 国内可达）
+# secrets: CLIENT_SECRET / DEEPSEEK_API_KEY（wrangler pages secret put，按 project-name）
+[[d1_databases]]
+binding = "DB"
+database_name = "pm-os-db"
+database_id = "536813c4-9f65-42c3-be24-4c38c40ffce4"

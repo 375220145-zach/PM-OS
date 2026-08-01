@@ -8,6 +8,7 @@ import AppShell from '@/components/layout/AppShell';
 import ProjectHeader from '@/components/layout/ProjectHeader';
 import Button from '@/components/shared/Button';
 import { generateId } from '@/lib/utils';
+import { aiAnalyzeMeeting } from '@/lib/ai-remote';
 
 interface AIResult {
   summary?: string;
@@ -47,13 +48,7 @@ export default function NewMeetingPage() {
     setError('');
 
     try {
-      const res = await fetch('/api/ai/analyze-meeting', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meetingText: transcript }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const data: AIResult = await res.json();
+      const data: AIResult = await aiAnalyzeMeeting(transcript);
       setAiResult(data);
     } catch (err) {
       setError((err as Error).message);

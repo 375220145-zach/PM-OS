@@ -5,6 +5,7 @@ import type { Project, Task, Milestone, MILEntry, BomItem } from '@/types';
 import { db } from '@/db/database';
 import { loadGraph, getNodesByProject } from '@/lib/graph/store';
 import { collectGraphContext, bfsTraverse } from '@/lib/graph/traversal';
+import { aiGraphExtract } from '@/lib/ai-remote';
 
 export interface PreCheckResult {
   projectName: string;
@@ -148,19 +149,9 @@ export async function collectProjectDataWithGraph(projectId: string): Promise<st
           })),
         };
 
-        const res = await fetch('/api/ai/graph/extract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sourceType: 'proj',
-            sourceId: projectId,
-            data: JSON.stringify(extractPayload),
-          }),
-        });
+        const result = await aiGraphExtract('proj', projectId, JSON.stringify(extractPayload));
 
-        if (res.ok) {
-          const result = await res.json();
-          if (result.nodes?.length > 0) {
+        if (result.nodes?.length > 0) {
             await rmNodes(projectId);
             await rmEdges(projectId);
             await upsertNodes(result.nodes);
@@ -174,7 +165,6 @@ export async function collectProjectDataWithGraph(projectId: string): Promise<st
               nodeCount: result.nodes.length,
               edgeCount: result.edges.length,
             });
-          }
         }
       } catch {
         // Extraction failed — agents still work without graph

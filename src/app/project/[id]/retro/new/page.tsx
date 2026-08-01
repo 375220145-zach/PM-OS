@@ -9,6 +9,7 @@ import ProjectHeader from '@/components/layout/ProjectHeader';
 import Button from '@/components/shared/Button';
 import { PHASES } from '@/lib/ipd';
 import { generateId } from '@/lib/utils';
+import { aiGenerateRetro } from '@/lib/ai-remote';
 
 export default function NewRetroPage() {
   const params = useParams();
@@ -59,13 +60,10 @@ export default function NewRetroPage() {
 变更记录: ${(await db.changeRecords.where('projectId').equals(id).count())} 条
 ${meetings.length > 0 ? '最近会议: ' + meetings.map(m => `[${m.title}] ${m.summary ?? ''}`).join('; ') : ''}`;
 
-      const res = await fetch('/api/ai/generate-retro', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectData }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      const data = (await aiGenerateRetro(projectData)) as unknown as {
+        title?: string; goalReview?: string; achievement?: string;
+        highlights?: string[]; gaps?: string[]; rootCauseAnalysis?: string; improvements?: string[];
+      };
 
       setTitle(data.title ?? `${phase} 阶段复盘`);
       setGoalReview(data.goalReview ?? '');

@@ -9,6 +9,7 @@ import Badge from '@/components/shared/Badge';
 import EmptyState from '@/components/shared/EmptyState';
 import { formatDate, generateId } from '@/lib/utils';
 import { downloadTemplate } from '@/lib/excel';
+import { aiAnalyzeMeeting } from '@/lib/ai-remote';
 import * as XLSX from 'xlsx';
 
 export default function WeeklyReportPage() {
@@ -71,14 +72,9 @@ export default function WeeklyReportPage() {
     setGenerating(true);
     const summary = `本周完成 ${doneThisWeek.length} 个任务，新增 ${newMILThisWeek.length} 个 MIL 问题，召开了 ${meetingsThisWeek.length} 场会议，当前有 ${overdueTasks.length} 个逾期任务。`;
     try {
-      const res = await fetch('/api/ai/analyze-meeting', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          meetingText: `本周工作总结：\n${summary}\n\n完成的任务：\n${doneThisWeek.map(t => `- ${t.name} [${getProjectName(t.projectId)}]`).join('\n')}\n\n新增MIL：\n${newMILThisWeek.map(m => `- [${m.severity}] ${m.title} [${getProjectName(m.projectId)}]`).join('\n')}\n\n逾期任务：\n${overdueTasks.map(t => `- ${t.name} [${getProjectName(t.projectId)}]`).join('\n')}`,
-        }),
-      });
-      const data = await res.json();
+      const data = (await aiAnalyzeMeeting(
+        `本周工作总结：\n${summary}\n\n完成的任务：\n${doneThisWeek.map(t => `- ${t.name} [${getProjectName(t.projectId)}]`).join('\n')}\n\n新增MIL：\n${newMILThisWeek.map(m => `- [${m.severity}] ${m.title} [${getProjectName(m.projectId)}]`).join('\n')}\n\n逾期任务：\n${overdueTasks.map(t => `- ${t.name} [${getProjectName(t.projectId)}]`).join('\n')}`,
+      )) as unknown as { summary?: string };
       setAiReport(data.summary ?? JSON.stringify(data));
     } catch (e) {
       setAiReport('生成失败: ' + (e as Error).message);

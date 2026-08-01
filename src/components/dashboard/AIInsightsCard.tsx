@@ -28,7 +28,7 @@ interface Bottleneck {
   suggestion: string;
 }
 
-interface InsightsResult {
+export interface InsightsResult {
   risk?: { risks: RiskItem[]; summary: string };
   cost?: { analyses: CostItem[]; summary: string; totalDeviationPercent: number };
   schedule?: { bottlenecks: Bottleneck[]; summary: string };
