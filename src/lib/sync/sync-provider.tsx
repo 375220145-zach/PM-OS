@@ -62,7 +62,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   const schedulePush = useCallback(() => {
     if (pushTimer.current) clearTimeout(pushTimer.current);
-    pushTimer.current = window.setTimeout(() => void doPush(), 3000);
+    pushTimer.current = window.setTimeout(() => void doPush(), 1500);
   }, [doPush]);
 
   // ── startup ───────────────────────────────────────────────────────────
