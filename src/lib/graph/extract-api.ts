@@ -37,6 +37,8 @@ function validateExtractionOutput(output: unknown): { valid: boolean; errors: Va
   const nodes = obj.nodes as GraphNode[];
   const edges = obj.edges as GraphEdge[];
   const nodeIds = new Set<string>();
+  const validNodes: GraphNode[] = [];
+  const validEdges: GraphEdge[] = [];
 
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
@@ -46,8 +48,10 @@ function validateExtractionOutput(output: unknown): { valid: boolean; errors: Va
     }
     if (!ENTITY_TYPES.includes(n.entityType)) {
       errors.push({ type: 'schema', message: `Node[${i}] unknown type: ${n.entityType}`, index: i });
+      continue;
     }
     nodeIds.add(n.id);
+    validNodes.push(n);
   }
 
   for (let i = 0; i < edges.length; i++) {
@@ -58,16 +62,20 @@ function validateExtractionOutput(output: unknown): { valid: boolean; errors: Va
     }
     if (!RELATION_TYPES.includes(e.relation)) {
       errors.push({ type: 'schema', message: `Edge[${i}] unknown relation: ${e.relation}`, index: i });
+      continue;
     }
     if (!nodeIds.has(e.sourceId)) {
       errors.push({ type: 'referential_integrity', message: `Edge[${i}] source ${e.sourceId.slice(0, 20)} not found`, index: i });
+      continue;
     }
     if (!nodeIds.has(e.targetId)) {
       errors.push({ type: 'referential_integrity', message: `Edge[${i}] target ${e.targetId.slice(0, 20)} not found`, index: i });
+      continue;
     }
+    validEdges.push(e);
   }
 
-  return { valid: errors.length === 0, errors, data: { nodes, edges } };
+  return { valid: errors.length === 0, errors, data: { nodes: validNodes, edges: validEdges } };
 }
 
 export async function extractEntitiesApi(
@@ -93,6 +101,9 @@ export async function extractEntitiesApi(
 
   const nodes = (validation.data?.nodes || []) as GraphNode[];
   const edges = (validation.data?.edges || []) as GraphEdge[];
+  if (validation.errors.length > 0) {
+    console.warn(`Extraction dropped ${validation.errors.length} invalid item(s):`, validation.errors.slice(0, 5));
+  }
 
   // Fill in defaults
   const now = Date.now();
@@ -109,7 +120,7 @@ export async function extractEntitiesApi(
   }
 
   for (const edge of edges) {
-    if (!edge.id) edge.id = `${sourceId.slice(0, 8)}--${edge.relation}--${(edge.sourceId || '').slice(0, 8)}--${(edge.targetId || '').slice(0, 8)}`;
+    if (!edge.id) edge.id = `${sourceId.slice(0, 8)}--${edge.relation}--${edge.sourceId || 'none'}--${edge.targetId || 'none'}`;
     if (sourceType === 'proj' && !edge.projectId) edge.projectId = sourceId;
     if (!edge.weight) edge.weight = 1;
     if (!edge.properties) edge.properties = {};

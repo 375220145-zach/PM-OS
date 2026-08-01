@@ -8,6 +8,7 @@ import AppShell from '@/components/layout/AppShell';
 import ProjectHeader from '@/components/layout/ProjectHeader';
 import Button from '@/components/shared/Button';
 import EmptyState from '@/components/shared/EmptyState';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { generateId, formatDate } from '@/lib/utils';
 import { downloadTemplate, parseExcelFile, pickFile } from '@/lib/excel';
 
@@ -15,6 +16,7 @@ export default function ChangesPage() {
   const params = useParams();
   const id = params.id as string;
   const [records, setRecords] = useState<ChangeRecord[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<ChangeRecord | null>(null);
 
   useEffect(() => {
     db.changeRecords.where('projectId').equals(id).reverse().sortBy('createdAt').then(result => setRecords(result.reverse()));
@@ -33,9 +35,10 @@ export default function ChangesPage() {
     setRecords(next);
   }
 
-  async function removeItem(index: number) {
-    await db.changeRecords.delete(records[index].id);
-    setRecords(records.filter((_, i) => i !== index));
+  async function removeItem(id: string) {
+    await db.changeRecords.delete(id);
+    setRecords(records.filter(r => r.id !== id));
+    setDeleteTarget(null);
   }
 
   function handleDownloadTemplate() {
@@ -82,10 +85,10 @@ export default function ChangesPage() {
               <div key={r.id} className="bg-white border border-gray-200 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-3">
                   <span className="text-xs text-gray-600">{formatDate(r.createdAt)}</span>
-                  <input value={r.applicant} onChange={e => updateItem(i, 'applicant', e.target.value)} placeholder="申请人" className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-20" />
-                  <input value={r.type} onChange={e => updateItem(i, 'type', e.target.value)} placeholder="变更类型" className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-24" />
-                  <input value={r.reviewResult} onChange={e => updateItem(i, 'reviewResult', e.target.value)} placeholder="评审结果" className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-24" />
-                  <button onClick={() => removeItem(i)} className="text-red-600 hover:text-red-300 text-xs ml-auto">删除</button>
+                  <input value={r.applicant} onChange={e => updateItem(i, 'applicant', e.target.value)} placeholder="申请人" title={r.applicant} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-28" />
+                  <input value={r.type} onChange={e => updateItem(i, 'type', e.target.value)} placeholder="变更类型" title={r.type} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-32" />
+                  <input value={r.reviewResult} onChange={e => updateItem(i, 'reviewResult', e.target.value)} placeholder="评审结果" title={r.reviewResult} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-36" />
+                  <button onClick={() => setDeleteTarget(records[i])} className="text-red-600 hover:text-red-300 text-xs ml-auto">删除</button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="text-xs text-gray-400 mb-1 block">变更内容</label><textarea value={r.content} onChange={e => updateItem(i, 'content', e.target.value)} rows={2} className="w-full bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-gray-700 text-xs resize-none" /></div>
@@ -96,6 +99,16 @@ export default function ChangesPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirm */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="删除变更记录"
+        message="确认删除这条变更记录？此操作不可恢复。"
+        confirmLabel="删除"
+        onConfirm={() => deleteTarget && removeItem(deleteTarget.id)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AppShell>
   );
 }

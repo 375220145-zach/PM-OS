@@ -15,7 +15,7 @@ interface Props {
   members: string[];
   editTask?: Task;
   conflicts?: string[];
-  onSaved: () => void;
+  onSaved: (task: Task) => void;
 }
 
 export default function TaskForm({ open, onClose, projectId, members, editTask, conflicts, onSaved }: Props) {
@@ -73,7 +73,7 @@ export default function TaskForm({ open, onClose, projectId, members, editTask, 
 
     await db.tasks.put(task);
     setSaving(false);
-    onSaved();
+    onSaved(task);
   }
 
   return (

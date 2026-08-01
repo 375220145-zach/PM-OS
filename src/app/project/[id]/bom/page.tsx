@@ -109,7 +109,15 @@ export default function BomPage() {
       phase: selectedPhase, lockedAt: 0,
     };
     await db.bomItems.put(item);
-    setItems([...items, item]);
+    if (!parentId) {
+      // Top-level items go on top; children stay right after their parent
+      setItems([item, ...items]);
+    } else {
+      const idx = items.findIndex(i => i.id === parentId);
+      const next = [...items];
+      next.splice(idx >= 0 ? idx + 1 : next.length, 0, item);
+      setItems(next);
+    }
   }
 
   async function updateItem(index: number, field: keyof BomItem, value: unknown) {
@@ -185,19 +193,19 @@ export default function BomPage() {
       <div className="p-4 md:p-6 max-w-full">
         {/* Summary cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-          <div className="bg-white border border-gray-200 rounded-xl p-3 border-l-2 border-l-blue-300">
+          <div className="bg-white border border-gray-200 rounded-xl p-3">
             <div className="text-[11px] text-gray-500">物料总数</div>
             <div className="text-lg font-bold text-blue-600 mt-0.5">{items.length}</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 border-l-2 border-l-emerald-300">
+          <div className="bg-white border border-gray-200 rounded-xl p-3">
             <div className="text-[11px] text-gray-500">开模数</div>
             <div className="text-lg font-bold text-emerald-700 mt-0.5">{moldCount}</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 border-l-2 border-l-amber-300">
+          <div className="bg-white border border-gray-200 rounded-xl p-3">
             <div className="text-[11px] text-gray-500">{PHASE_LABELS[selectedPhase]} 单台 BOM 成本</div>
             <div className="text-lg font-bold text-amber-700 mt-0.5">¥{totalBomCost.toLocaleString()}</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 border-l-2 border-l-violet-300">
+          <div className="bg-white border border-gray-200 rounded-xl p-3">
             <div className="text-[11px] text-gray-500">MP 总物料成本</div>
             <div className="text-lg font-bold text-violet-600 mt-0.5">¥{(totalBomCost * (mpQuantity || 1)).toLocaleString()}</div>
             {mpQuantity > 0 && <div className="text-[10px] text-gray-600">× {mpQuantity.toLocaleString()} 台</div>}
@@ -248,11 +256,11 @@ export default function BomPage() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <button onClick={() => setViewMode('tree')}
-              className={`text-xs px-3 py-1.5 rounded ${viewMode === 'tree' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400 hover:text-gray-700'}`}>完整 BOM</button>
+              className={`text-xs px-3 py-1.5 rounded ${viewMode === 'tree' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-400 hover:text-gray-700'}`}>完整 BOM</button>
             <button onClick={() => setViewMode('category')}
-              className={`text-xs px-3 py-1.5 rounded ${viewMode === 'category' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400 hover:text-gray-700'}`}>按类别</button>
+              className={`text-xs px-3 py-1.5 rounded ${viewMode === 'category' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-400 hover:text-gray-700'}`}>按类别</button>
             <button onClick={() => setViewMode('cost')}
-              className={`text-xs px-3 py-1.5 rounded ${viewMode === 'cost' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400 hover:text-gray-700'}`}>成本</button>
+              className={`text-xs px-3 py-1.5 rounded ${viewMode === 'cost' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-400 hover:text-gray-700'}`}>成本</button>
             <span className="w-px h-4 bg-gray-100 mx-1" />
             <button onClick={collapseAll} className="text-xs text-gray-400 hover:text-gray-700">全部折叠</button>
             <button onClick={expandAll} className="text-xs text-gray-400 hover:text-gray-700">全部展开</button>
@@ -372,10 +380,10 @@ function TreeConnector({ node }: { node: FlatBomNode }) {
 }
 
 const CAT_COLORS: Record<string, string> = {
-  structure: 'border-l-blue-400 bg-blue-50',
-  hardware: 'border-l-emerald-400 bg-emerald-50',
-  packaging: 'border-l-amber-400 bg-amber-50',
-  other: 'border-l-gray-300 bg-gray-50',
+  structure: 'bg-blue-50',
+  hardware: 'bg-emerald-50',
+  packaging: 'bg-amber-50',
+  other: 'bg-gray-50',
 };
 const CAT_BADGES: Record<string, string> = {
   structure: 'text-blue-700 bg-blue-100',
@@ -460,7 +468,7 @@ function BomTreeView({
                   <span className={`text-[10px] px-1.5 py-0.5 rounded ${CAT_BADGES[item.category] || CAT_BADGES.other}`}>{CATEGORY_LABELS[item.category]}</span>
                 </td>
                 {/* Part number */}
-                <td className="px-2 py-2 align-top pt-2.5"><input value={item.partNumber ?? ''} onChange={e => onUpdate(item, 'partNumber', e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-1 py-0.5 text-gray-700 text-xs w-16" /></td>
+                <td className="px-2 py-2 align-top pt-2.5 min-w-[84px]"><input value={item.partNumber ?? ''} onChange={e => onUpdate(item, 'partNumber', e.target.value)} title={item.partNumber ?? ''} className="w-full bg-gray-100 border border-gray-200 rounded px-1 py-0.5 text-gray-700 text-xs" /></td>
                 {/* Description (editable with save) */}
                 <td className="px-2 py-2 align-top pt-2.5 max-w-[160px]">
                   {descEditing === item.id ? (
@@ -485,14 +493,14 @@ function BomTreeView({
                 {/* Subtotal */}
                 <td className="px-2 py-2 align-top pt-2.5 text-right font-medium" style={{ color: item.totalCost > 0 ? '#60a5fa' : '#6b7280' }}>¥{(item.totalCost || 0).toLocaleString()}</td>
                 {/* Notes (requirement moved here) */}
-                <td className="px-2 py-2 align-top pt-2.5 max-w-[120px]">
+                <td className="px-2 py-2 align-top pt-2.5 min-w-[200px] max-w-[260px]">
                   <input value={item.notes ?? ''} onChange={e => onUpdate(item, 'notes', e.target.value)}
                     placeholder={item.requirement || ''}
-                    className="bg-gray-100 border border-gray-200 rounded px-1 py-0.5 text-gray-700 text-xs w-full"
-                    title={item.requirement ? `需求: ${item.requirement}` : ''} />
+                    className="w-full bg-gray-100 border border-gray-200 rounded px-1 py-0.5 text-gray-700 text-xs"
+                    title={item.notes ? `备注: ${item.notes}` : (item.requirement ? `需求: ${item.requirement}` : '')} />
                 </td>
                 {/* Actions */}
-                <td className="px-2 py-2 align-top pt-2.5"><button onClick={() => onRemove(item)} className="text-red-700/50 hover:text-red-600 text-[10px]"> <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="inline-block"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>
+                <td className="px-2 py-2 align-top pt-2.5"><button onClick={() => onRemove(item)} className="text-red-700 hover:text-red-600 text-[10px] font-medium">删除</button></td>
               </tr>
             );
           })}
@@ -512,7 +520,7 @@ function BomCategoryView({ items, catCosts }: { items: BomItem[]; catCosts: Reco
         const catItems = items.filter(i => i.category === cat);
         const subtotal = catItems.reduce((s, i) => s + (i.totalCost || 0), 0);
         return (
-          <div key={cat} className={`bg-white border border-gray-200 rounded-xl overflow-hidden ${CAT_COLORS[cat] || CAT_COLORS.other} border-l-2`}>
+          <div key={cat} className={`bg-white border border-gray-200 rounded-xl overflow-hidden ${CAT_COLORS[cat] || CAT_COLORS.other}`}>
             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
               <span className="font-semibold text-sm text-gray-700">{CATEGORY_LABELS[cat]}</span>
               <span className="text-sm font-bold text-blue-600">¥{subtotal.toLocaleString()}</span>

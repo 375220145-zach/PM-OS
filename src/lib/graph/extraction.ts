@@ -49,6 +49,8 @@ export function validateExtraction(output: unknown): { valid: boolean; errors: V
   const nodes = obj.nodes as GraphNode[];
   const edges = obj.edges as GraphEdge[];
   const nodeIds = new Set<string>();
+  const validNodes: GraphNode[] = [];
+  const validEdges: GraphEdge[] = [];
 
   // Validate nodes
   for (let i = 0; i < nodes.length; i++) {
@@ -59,13 +61,16 @@ export function validateExtraction(output: unknown): { valid: boolean; errors: V
     }
     if (!ENTITY_TYPES.includes(n.entityType)) {
       errors.push({ type: 'schema', message: `Node[${i}] unknown entityType: ${n.entityType}`, index: i });
+      continue;
     }
     // Validate ID format: {source}--{type}--{label}
     const parts = n.id.split('--');
     if (parts.length < 3) {
       errors.push({ type: 'id_format', message: `Node[${i}] invalid ID format: ${n.id}`, index: i });
+      continue;
     }
     nodeIds.add(n.id);
+    validNodes.push(n);
   }
 
   // Validate edges
@@ -77,13 +82,16 @@ export function validateExtraction(output: unknown): { valid: boolean; errors: V
     }
     if (!RELATION_TYPES.includes(e.relation)) {
       errors.push({ type: 'schema', message: `Edge[${i}] unknown relation: ${e.relation}`, index: i });
+      continue;
     }
     // Referential integrity: source and target must exist in nodes
     if (!nodeIds.has(e.sourceId)) {
       errors.push({ type: 'referential_integrity', message: `Edge[${i}] sourceId "${e.sourceId}" not found in nodes`, index: i });
+      continue;
     }
     if (!nodeIds.has(e.targetId)) {
       errors.push({ type: 'referential_integrity', message: `Edge[${i}] targetId "${e.targetId}" not found in nodes`, index: i });
+      continue;
     }
     // Edge validity: check relation constraints
     const constraints = RELATION_CONSTRAINTS[e.relation];
@@ -92,14 +100,17 @@ export function validateExtraction(output: unknown): { valid: boolean; errors: V
       const targetNode = nodes.find(n => n.id === e.targetId);
       if (sourceNode && !constraints.source.includes(sourceNode.entityType)) {
         errors.push({ type: 'edge_validity', message: `Edge[${i}] relation ${e.relation} cannot source from ${sourceNode.entityType}`, index: i });
+        continue;
       }
       if (targetNode && !constraints.target.includes(targetNode.entityType)) {
         errors.push({ type: 'edge_validity', message: `Edge[${i}] relation ${e.relation} cannot target ${targetNode.entityType}`, index: i });
+        continue;
       }
     }
+    validEdges.push(e);
   }
 
-  return { valid: errors.length === 0, errors, data: { nodes, edges } };
+  return { valid: errors.length === 0, errors, data: { nodes: validNodes, edges: validEdges } };
 }
 
 // ===== Extraction Engine =====
@@ -136,8 +147,7 @@ export async function extractEntities(input: ExtractionInput): Promise<Extractio
 
   const validation = validateExtraction(parsed);
   if (!validation.valid && input.autoValidate !== false) {
-    console.warn('Extraction validation warnings:', validation.errors);
-    // Still proceed with valid nodes/edges if data exists
+    console.warn(`Extraction dropped ${validation.errors.length} invalid item(s):`, validation.errors.slice(0, 5));
   }
 
   const nodes = validation.data?.nodes || [];
@@ -154,9 +164,9 @@ export async function extractEntities(input: ExtractionInput): Promise<Extractio
     if (!node.properties) node.properties = {};
   }
 
-  // Assign IDs to edges
+  // Assign IDs to edges (full node IDs in the key — short slices collide and overwrite same-type edges)
   for (const edge of edges) {
-    if (!edge.id) edge.id = `${input.sourceId.slice(0, 8)}--${edge.relation}--${(edge.sourceId || '').slice(0, 8)}--${(edge.targetId || '').slice(0, 8)}`;
+    if (!edge.id) edge.id = `${input.sourceId.slice(0, 8)}--${edge.relation}--${edge.sourceId || 'none'}--${edge.targetId || 'none'}`;
     if (input.sourceType === 'proj' && !edge.projectId) edge.projectId = input.sourceId;
     if (!edge.weight) edge.weight = 1;
     if (!edge.properties) edge.properties = {};

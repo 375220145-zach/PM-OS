@@ -11,6 +11,7 @@ import TaskForm from '@/components/schedule/TaskForm';
 import GanttChart from '@/components/schedule/GanttChart';
 import Button from '@/components/shared/Button';
 import EmptyState from '@/components/shared/EmptyState';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { downloadTemplate, parseExcelFile, pickFile } from '@/lib/excel';
 import { generateId } from '@/lib/utils';
 
@@ -29,6 +30,7 @@ export default function SchedulePage() {
   const [editTask, setEditTask] = useState<Task | undefined>();
   const [highlightId, setHighlightId] = useState<string | null>(hlId);
   const [incompleteOnly, setIncompleteOnly] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
 
   useEffect(() => {
     db.projects.get(id).then(p => setProject(p ?? null));
@@ -53,8 +55,17 @@ export default function SchedulePage() {
     db.milestones.where('projectId').equals(id).sortBy('order').then(setMilestones);
   }, [id, hlId]);
 
-  async function refreshTasks() {
+  async function refreshTasks(savedTask?: Task) {
     const ts = await db.tasks.where('projectId').equals(id).toArray();
+    // Newly created tasks go to the top of their phase group
+    if (savedTask && !editTask) {
+      const idx = ts.findIndex(t => t.id === savedTask.id);
+      if (idx > 0) {
+        const [moved] = ts.splice(idx, 1);
+        const firstSamePhase = ts.findIndex(t => t.phase === moved.phase);
+        ts.splice(firstSamePhase === -1 ? 0 : firstSamePhase, 0, moved);
+      }
+    }
     setTasks(ts);
     setShowForm(false);
     setEditTask(undefined);
@@ -64,6 +75,17 @@ export default function SchedulePage() {
     for (const tid of ids) {
       await db.tasks.update(tid, updates as Partial<Task>);
     }
+    refreshTasks();
+  }
+
+  async function handleDeleteTask(task: Task) {
+    // Remove this task, plus any dependency references pointing to it
+    await db.tasks.delete(task.id);
+    const referencing = tasks.filter(t => t.dependencies?.includes(task.id));
+    for (const t of referencing) {
+      await db.tasks.update(t.id, { dependencies: t.dependencies.filter(d => d !== task.id) });
+    }
+    setDeleteTarget(null);
     refreshTasks();
   }
 
@@ -152,7 +174,7 @@ export default function SchedulePage() {
             action={{ label: '新建任务', onClick: () => setShowForm(true) }}
           />
         ) : view === 'list' ? (
-          <TaskList tasks={incompleteOnly ? tasks.filter(t => t.status !== 'done') : tasks} highlightId={highlightId} onEdit={(t) => { setEditTask(t); setShowForm(true); }} onBatchUpdate={handleBatchUpdate} />
+          <TaskList tasks={incompleteOnly ? tasks.filter(t => t.status !== 'done') : tasks} highlightId={highlightId} onEdit={(t) => { setEditTask(t); setShowForm(true); }} onBatchUpdate={handleBatchUpdate} onDelete={setDeleteTarget} />
         ) : (
           <GanttChart tasks={incompleteOnly ? tasks.filter(t => t.status !== 'done') : tasks} milestones={milestones} onEdit={(t) => { setEditTask(t); setShowForm(true); }} />
         )}
@@ -166,6 +188,15 @@ export default function SchedulePage() {
           editTask={editTask}
           conflicts={editConflicts}
           onSaved={refreshTasks}
+        />
+
+        <ConfirmDialog
+          open={!!deleteTarget}
+          title="删除任务"
+          message={`确认删除任务「${deleteTarget?.name || ''}」？此操作不可恢复。`}
+          confirmLabel="删除"
+          onConfirm={() => deleteTarget && handleDeleteTask(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
         />
       </div>
     </AppShell>

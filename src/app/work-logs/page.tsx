@@ -8,6 +8,7 @@ import AppShell from '@/components/layout/AppShell';
 import Button from '@/components/shared/Button';
 import Modal from '@/components/shared/Modal';
 import EmptyState from '@/components/shared/EmptyState';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { generateId } from '@/lib/utils';
 
 function WorkLogsContent() {
@@ -23,6 +24,7 @@ function WorkLogsContent() {
   const [newItems, setNewItems] = useState<string[]>(['']);
   const [editing, setEditing] = useState<WorkLogEntry | null>(null);
   const [editItems, setEditItems] = useState<string[]>(['']);
+  const [deleteTarget, setDeleteTarget] = useState<WorkLogEntry | null>(null);
 
   useEffect(() => {
     db.projects.toArray().then(setProjects);
@@ -96,6 +98,7 @@ function WorkLogsContent() {
   async function remove(logId: string) {
     await db.workLogs.delete(logId);
     setLogs(logs.filter(l => l.id !== logId));
+    setDeleteTarget(null);
   }
 
   function formatTime(ts: number) {
@@ -155,7 +158,7 @@ function WorkLogsContent() {
                     </div>
                     <div className="flex gap-3">
                       <button onClick={() => openEdit(log)} className="text-xs text-gray-400 hover:text-gray-700">编辑</button>
-                      <button onClick={() => remove(log.id)} className="text-xs text-red-700 hover:text-red-600">删除</button>
+                      <button onClick={() => setDeleteTarget(log)} className="text-xs text-red-700 hover:text-red-600">删除</button>
                     </div>
                   </div>
                   <div className="px-5 py-3 space-y-1">
@@ -222,6 +225,16 @@ function WorkLogsContent() {
           </div>
         </div>
       </Modal>
+
+      {/* Delete Confirm */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="删除工作记录"
+        message={`确认删除「${deleteTarget ? formatTime(deleteTarget.createdAt) : ''}」的工作记录？此操作不可恢复。`}
+        confirmLabel="删除"
+        onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AppShell>
   );
 }

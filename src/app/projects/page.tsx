@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Project, Task, MILEntry } from '@/types';
 import { db } from '@/db/database';
 import AppShell from '@/components/layout/AppShell';
 import ProjectForm from '@/components/project/ProjectForm';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
+import Button from '@/components/shared/Button';
 import { NonDemoOnly } from '@/components/shared/DemoGuard';
 import { PHASE_LABELS, PROJECT_MODE_LABELS } from '@/lib/ipd';
+import gsap from 'gsap';
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -17,6 +19,7 @@ export default function ProjectsPage() {
   const [allMILs, setAllMILs] = useState<MILEntry[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     Promise.all([db.projects.toArray(), db.tasks.toArray(), db.milEntries.toArray()]).then(([p, t, m]) => {
@@ -25,6 +28,13 @@ export default function ProjectsPage() {
       setAllMILs(m);
     });
   }, []);
+
+  // Card entrance stagger
+  useEffect(() => {
+    const cards = gridRef.current?.querySelectorAll('[data-stagger]');
+    if (!cards?.length) return;
+    gsap.fromTo(cards, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.07, ease: 'power2.out' });
+  }, [projects]);
 
   function projectHealth(p: Project): 'green' | 'red' {
     const ptasks = allTasks.filter(t => t.projectId === p.id);
@@ -67,10 +77,7 @@ export default function ProjectsPage() {
             <p className="text-sm text-gray-400 mt-1">{projects.length} 个项目</p>
           </div>
           <NonDemoOnly>
-            <button onClick={() => setShowForm(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors">
-              + 新建项目
-            </button>
+            <Button onClick={() => setShowForm(true)}>+ 新建项目</Button>
           </NonDemoOnly>
         </div>
 
@@ -79,9 +86,9 @@ export default function ProjectsPage() {
             <h2 className="text-sm font-semibold text-gray-400 mb-4">
               进行中 <span className="text-gray-600 font-normal">{activeProjects.length} 个</span>
             </h2>
-            <div className="grid grid-cols-2 gap-4 mb-8">
+            <div ref={gridRef} className="grid grid-cols-2 gap-4 mb-8">
               {activeProjects.map(p => (
-                <div key={p.id} className="relative group bg-white border border-gray-200 hover:border-gray-200 rounded-xl transition-colors">
+                <div key={p.id} data-stagger className="relative group bg-white border border-gray-200 hover:border-gray-300 rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-md">
                   <div onClick={() => router.push(`/project/${p.id}`)} className="block p-5 cursor-pointer">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -112,7 +119,7 @@ export default function ProjectsPage() {
             </h2>
             <div className="grid grid-cols-2 gap-4 opacity-60 hover:opacity-80 transition-opacity">
               {[...archivedProjects, ...terminatedProjects].map(p => (
-                <div key={p.id} className="relative group bg-white border border-gray-200 hover:border-gray-200 rounded-xl transition-colors">
+                <div key={p.id} data-stagger className="relative group bg-white border border-gray-200 hover:border-gray-300 rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-md">
                   <div onClick={() => router.push(`/project/${p.id}`)} className="block p-5 cursor-pointer">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">

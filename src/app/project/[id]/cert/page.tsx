@@ -8,6 +8,7 @@ import AppShell from '@/components/layout/AppShell';
 import ProjectHeader from '@/components/layout/ProjectHeader';
 import Button from '@/components/shared/Button';
 import EmptyState from '@/components/shared/EmptyState';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { generateId } from '@/lib/utils';
 import { downloadTemplate, parseExcelFile, pickFile } from '@/lib/excel';
 
@@ -15,6 +16,7 @@ export default function CertPage() {
   const params = useParams();
   const id = params.id as string;
   const [items, setItems] = useState<CertRequirement[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<CertRequirement | null>(null);
 
   useEffect(() => {
     db.certRequirements.where('projectId').equals(id).toArray().then(setItems);
@@ -23,7 +25,7 @@ export default function CertPage() {
   async function add() {
     const item: CertRequirement = { id: generateId(), projectId: id, market: '', certName: '', deliverable: '', estimatedCost: 0, sampleRequirement: '' };
     await db.certRequirements.put(item);
-    setItems([...items, item]);
+    setItems([item, ...items]);
   }
 
   async function updateItem(index: number, field: keyof CertRequirement, value: unknown) {
@@ -33,9 +35,10 @@ export default function CertPage() {
     setItems(next);
   }
 
-  async function removeItem(index: number) {
-    await db.certRequirements.delete(items[index].id);
-    setItems(items.filter((_, i) => i !== index));
+  async function removeItem(id: string) {
+    await db.certRequirements.delete(id);
+    setItems(items.filter(i => i.id !== id));
+    setDeleteTarget(null);
   }
 
   const totalCost = items.reduce((s, i) => s + i.estimatedCost, 0);
@@ -90,13 +93,13 @@ export default function CertPage() {
               <tbody>
                 {items.map((item, i) => (
                   <tr key={item.id} className="border-b border-gray-200">
-                    <td className="px-4 py-2"><input value={item.market} onChange={e => updateItem(i, 'market', e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-20" /></td>
-                    <td className="px-4 py-2"><input value={item.certName} onChange={e => updateItem(i, 'certName', e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-28" /></td>
-                    <td className="px-4 py-2"><input value={item.deliverable} onChange={e => updateItem(i, 'deliverable', e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-20" /></td>
-                    <td className="px-4 py-2 text-right"><input type="number" value={item.estimatedCost} onChange={e => updateItem(i, 'estimatedCost', Number(e.target.value))} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-24 text-right" /></td>
-                    <td className="px-4 py-2"><input value={item.sampleRequirement} onChange={e => updateItem(i, 'sampleRequirement', e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-32" /></td>
-                    <td className="px-4 py-2"><input value={item.notes ?? ''} onChange={e => updateItem(i, 'notes', e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-24" /></td>
-                    <td className="px-4 py-2"><button onClick={() => removeItem(i)} className="text-red-600 hover:text-red-300 text-xs">删除</button></td>
+                    <td className="px-4 py-2 min-w-[100px]"><input value={item.market} onChange={e => updateItem(i, 'market', e.target.value)} title={item.market} className="w-full bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs" /></td>
+                    <td className="px-4 py-2 min-w-[120px]"><input value={item.certName} onChange={e => updateItem(i, 'certName', e.target.value)} title={item.certName} className="w-full bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs" /></td>
+                    <td className="px-4 py-2 min-w-[120px]"><input value={item.deliverable} onChange={e => updateItem(i, 'deliverable', e.target.value)} title={item.deliverable} className="w-full bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs" /></td>
+                    <td className="px-4 py-2 text-right min-w-[100px]"><input type="number" value={item.estimatedCost} onChange={e => updateItem(i, 'estimatedCost', Number(e.target.value))} title={String(item.estimatedCost)} className="w-full bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs text-right" /></td>
+                    <td className="px-4 py-2 min-w-[160px]"><input value={item.sampleRequirement} onChange={e => updateItem(i, 'sampleRequirement', e.target.value)} title={item.sampleRequirement} className="w-full bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs" /></td>
+                    <td className="px-4 py-2 min-w-[160px]"><input value={item.notes ?? ''} onChange={e => updateItem(i, 'notes', e.target.value)} title={item.notes ?? ''} className="w-full bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs" /></td>
+                    <td className="px-4 py-2"><button onClick={() => setDeleteTarget(items[i])} className="text-red-600 hover:text-red-300 text-xs">删除</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -104,6 +107,16 @@ export default function CertPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirm */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="删除认证要求"
+        message={`确认删除「${deleteTarget?.certName || ''}」？此操作不可恢复。`}
+        confirmLabel="删除"
+        onConfirm={() => deleteTarget && removeItem(deleteTarget.id)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AppShell>
   );
 }

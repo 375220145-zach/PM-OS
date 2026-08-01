@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import type { Project, Member } from '@/types';
 import { db } from '@/db/database';
@@ -8,6 +8,8 @@ import AppShell from '@/components/layout/AppShell';
 import ProjectHeader from '@/components/layout/ProjectHeader';
 import Button from '@/components/shared/Button';
 import EmptyState from '@/components/shared/EmptyState';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
+import { useUnsaved } from '@/lib/unsaved-changes';
 
 export default function MembersPage() {
   const params = useParams();
@@ -15,6 +17,21 @@ export default function MembersPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [saved, setSaved] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<{ member: Member; index: number } | null>(null);
+  const { setDirty, registerSave, unregisterSave } = useUnsaved();
+
+  const markDirty = () => { setSaved(false); setDirty(true); };
+  const markClean = () => { setSaved(true); setDirty(false); };
+
+  // Register this page's save fn with the global unsaved-changes guard.
+  // Ref pattern: re-renders must NOT re-trigger register/unregister,
+  // because unregisterSave clears dirty (which markDirty just set).
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    registerSave(() => saveRef.current());
+    return unregisterSave;
+  }, [registerSave, unregisterSave]);
 
   useEffect(() => {
     db.projects.get(id).then(p => {
@@ -24,27 +41,28 @@ export default function MembersPage() {
   }, [id]);
 
   async function addMember() {
-    setMembers([...members, { name: '', role: '', estimatedHours: 0, actualHours: 0 }]);
-    setSaved(false);
+    setMembers([{ name: '', role: '', estimatedHours: 0, actualHours: 0 }, ...members]);
+    markDirty();
   }
 
   function updateMember(index: number, field: keyof Member, value: string | number | undefined) {
     const next = [...members];
     next[index] = { ...next[index], [field]: field === 'estimatedHours' || field === 'actualHours' ? (Number(value) || 0) : value };
     setMembers(next);
-    setSaved(false);
+    markDirty();
   }
 
   function removeMember(index: number) {
     setMembers(members.filter((_, i) => i !== index));
-    setSaved(false);
+    markDirty();
+    setDeleteTarget(null);
   }
 
   async function save() {
     if (!project) return;
     await db.projects.update(id, { members, updatedAt: Date.now() });
     setProject({ ...project, members, updatedAt: Date.now() });
-    setSaved(true);
+    markClean();
   }
 
   const totalEstHours = members.reduce((s, m) => s + (m.estimatedHours ?? 0), 0);
@@ -63,18 +81,7 @@ export default function MembersPage() {
               <span>实际总工时: {totalActHours}h</span>
             </div>
           </div>
-          <div className="flex gap-3">
-            {!saved && (
-              <>
-                <Button variant="secondary" onClick={() => {
-                  db.projects.get(id).then(p => setMembers(p?.members ?? []));
-                  setSaved(true);
-                }}>取消</Button>
-                <Button onClick={save}>保存</Button>
-              </>
-            )}
-            <Button variant={saved ? 'primary' : 'secondary'} onClick={addMember}>+ 添加成员</Button>
-          </div>
+          <Button onClick={addMember}>+ 添加成员</Button>
         </div>
 
         {members.length === 0 ? (
@@ -121,7 +128,7 @@ export default function MembersPage() {
                         className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-24 text-right" />
                     </td>
                     <td className="px-4 py-2">
-                      <button onClick={() => removeMember(i)} className="text-red-600 hover:text-red-300 text-xs">删除</button>
+                      <button onClick={() => setDeleteTarget({ member: m, index: i })} className="text-red-600 hover:text-red-300 text-xs">删除</button>
                     </td>
                   </tr>
                 ))}
@@ -129,6 +136,29 @@ export default function MembersPage() {
             </table>
           </div>
         )}
+
+        {/* Save bar — below the table, matching form dialog button placement */}
+        {!saved && (
+          <div className="mt-4 flex items-center justify-between">
+            <span className="text-xs text-amber-600">有未保存的修改</span>
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={() => {
+                db.projects.get(id).then(p => setMembers(p?.members ?? []));
+                markClean();
+              }}>取消</Button>
+              <Button onClick={save}>保存</Button>
+            </div>
+          </div>
+        )}
+
+        <ConfirmDialog
+          open={!!deleteTarget}
+          title="删除成员"
+          message={`确认删除成员「${deleteTarget?.member.name || '(未命名)'}」？此操作不可恢复。`}
+          confirmLabel="删除"
+          onConfirm={() => deleteTarget && removeMember(deleteTarget.index)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </div>
     </AppShell>
   );

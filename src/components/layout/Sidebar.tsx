@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Icon, { type IconName } from '../shared/Icon';
+import ConfirmDialog from '../shared/ConfirmDialog';
+import { useUnsaved } from '@/lib/unsaved-changes';
 import { saveScrollBeforeNav } from './AppShell';
 
 type ModuleKey = 'overview' | 'schedule' | 'mil' | 'members' | 'bom' | 'budget' | 'procurement' | 'cert' | 'meetings' | 'retro' | 'changes';
@@ -64,7 +66,43 @@ const MODULE_GROUPS: ModuleGroup[] = [
 
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
   const projectId = pathname.match(/\/project\/([^/]+)/)?.[1];
+  const navRef = useRef<HTMLElement>(null);
+  const SIDEBAR_SCROLL_KEY = 'pmos-sidebar-scroll';
+  const { dirty, saveFn } = useUnsaved();
+  const [pendingNav, setPendingNav] = useState<string | null>(null);
+
+  // Save sidebar nav scroll before navigating away
+  const saveSidebarScroll = useCallback(() => {
+    if (navRef.current) {
+      sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(navRef.current.scrollTop));
+    }
+  }, []);
+
+  // Intercept navigation while there are unsaved changes
+  const handleNav = useCallback((e: React.MouseEvent, href: string) => {
+    saveSidebarScroll();
+    saveScrollBeforeNav();
+    onNavigate?.();
+    if (dirty) {
+      e.preventDefault();
+      setPendingNav(href);
+    }
+  }, [dirty, onNavigate, saveSidebarScroll]);
+
+  // Restore sidebar scroll after navigation (Next static export resets it lazily — poll briefly)
+  useEffect(() => {
+    const saved = sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
+    if (saved === null || !navRef.current) return;
+    const restore = () => {
+      if (navRef.current) navRef.current.scrollTop = Number(saved);
+    };
+    restore();
+    const timer = setInterval(restore, 100);
+    const stop = setTimeout(() => clearInterval(timer), 1500);
+    return () => { clearInterval(timer); clearTimeout(stop); };
+  }, [pathname]);
 
   // Initialize collapse state from localStorage
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -87,18 +125,24 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <aside className="w-56 bg-white border-r border-gray-200 flex flex-col h-full">
-      {/* Logo */}
+      {/* Logo — 2×2 dot grid mark (selected 2026-08-01) */}
       <div className="px-4 py-4 border-b border-gray-100">
         <Link
           href="/"
           onClick={onNavigate}
-          className="text-lg font-bold text-gray-800 hover:text-indigo-600 transition-colors"
+          className="flex items-center gap-2.5 text-lg font-bold text-gray-800 hover:text-indigo-600 transition-colors"
         >
-          PM <span className="text-indigo-600 border-b-2 border-indigo-400">OS</span>
+          <svg width="22" height="22" viewBox="0 0 22 22" className="shrink-0" aria-hidden>
+            <circle cx="7" cy="7" r="4.5" fill="#6366f1"/>
+            <circle cx="15" cy="7" r="4.5" fill="#c7d2fe"/>
+            <circle cx="7" cy="15" r="4.5" fill="#c7d2fe"/>
+            <circle cx="15" cy="15" r="4.5" fill="#6366f1" opacity="0.45"/>
+          </svg>
+          <span>PM <span className="text-indigo-600 font-extrabold">OS</span></span>
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
+      <nav ref={navRef} className="flex-1 overflow-y-auto p-3 space-y-0.5">
         {/* Global nav */}
         {GLOBAL_LINKS.map(link => {
           const isActive = link.href === '/'
@@ -109,7 +153,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               key={link.href}
               href={link.href}
               scroll={false}
-              onClick={() => { saveScrollBeforeNav(); onNavigate?.(); }}
+              onClick={(e) => handleNav(e, link.href)}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 isActive
                   ? 'bg-indigo-50 text-indigo-700 border-l-2 border-indigo-600 -ml-[2px] font-medium'
@@ -152,7 +196,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         key={item.key}
                         href={fullHref}
                         scroll={false}
-                        onClick={() => { saveScrollBeforeNav(); onNavigate?.(); }}
+                        onClick={(e) => handleNav(e, fullHref)}
                         title={item.label}
                         className={`flex items-center px-4 py-1.5 rounded-r-lg text-sm transition-colors ml-3 ${
                           isActive
@@ -177,6 +221,23 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           PM OS <span className="text-indigo-400">v0.2</span>
         </div>
       </div>
+
+      {/* Unsaved changes guard */}
+      <ConfirmDialog
+        open={!!pendingNav}
+        title="有未保存的修改"
+        message="当前页面有未保存的修改，是否保存后再离开？"
+        confirmLabel="保存并离开"
+        variant="primary"
+        onConfirm={async () => {
+          const href = pendingNav;
+          if (!href) return;
+          if (saveFn) await saveFn();
+          setPendingNav(null);
+          router.push(href);
+        }}
+        onCancel={() => setPendingNav(null)}
+      />
     </aside>
   );
 }

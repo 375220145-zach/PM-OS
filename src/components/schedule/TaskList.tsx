@@ -12,9 +12,10 @@ interface Props {
   highlightId?: string | null;
   onEdit: (task: Task) => void;
   onBatchUpdate: (ids: string[], updates: { status?: TaskStatus; assignee?: string }) => void;
+  onDelete: (task: Task) => void;
 }
 
-export default function TaskList({ tasks, highlightId, onEdit, onBatchUpdate }: Props) {
+export default function TaskList({ tasks, highlightId, onEdit, onBatchUpdate, onDelete }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchMode, setBatchMode] = useState(false);
 
@@ -73,13 +74,11 @@ export default function TaskList({ tasks, highlightId, onEdit, onBatchUpdate }: 
           <div className="space-y-1">
             {phaseTasks.map(t => (
               <div key={t.id} id={`task-${t.id}`}
-                className={`flex items-center gap-3 bg-white border-l-[3px] rounded-lg pl-3 pr-4 py-3 transition-all shadow-sm ${
+                className={`flex items-center gap-3 bg-white border rounded-lg pl-3 pr-4 py-3 transition-all shadow-sm ${
                   highlightId === t.id ? 'ring-2 ring-indigo-400 bg-indigo-50' : ''
                 } ${
-                  selected.has(t.id) ? 'border-indigo-300 bg-indigo-50 border-l-indigo-500' :
-                  t.status === 'done' ? 'border-gray-200 border-l-emerald-400 opacity-60' :
-                  t.status === 'in-progress' ? 'border-gray-200 border-l-blue-400' :
-                  'border-gray-200 border-l-gray-300'
+                  selected.has(t.id) ? 'border-indigo-300 bg-indigo-50' :
+                  'border-gray-200'
                 } hover:border-gray-300`}>
                 <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggle(t.id)}
                   onClick={e => e.stopPropagation()} className="rounded flex-shrink-0" />
@@ -96,9 +95,13 @@ export default function TaskList({ tasks, highlightId, onEdit, onBatchUpdate }: 
                     {t.deliverable && <span>→ {t.deliverable}</span>}
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0 cursor-pointer" onClick={() => onEdit(t)}>
-                  <div className={`text-xs ${t.status === 'done' ? 'text-gray-400' : 'text-gray-500'}`}>{formatDate(t.startDate)} — {formatDate(t.endDate)}</div>
-                  <div className={`text-xs mt-0.5 font-medium ${t.status === 'done' ? 'text-emerald-600' : t.status === 'in-progress' ? 'text-blue-600' : 'text-gray-500'}`}>{STATUS_LABELS[t.status]}</div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="text-right cursor-pointer" onClick={() => onEdit(t)}>
+                    <div className={`text-xs ${t.status === 'done' ? 'text-gray-400' : 'text-gray-500'}`}>{formatDate(t.startDate)} — {formatDate(t.endDate)}</div>
+                    <div className={`text-xs mt-0.5 font-medium ${t.status === 'done' ? 'text-emerald-600' : t.status === 'in-progress' ? 'text-blue-600' : 'text-gray-500'}`}>{STATUS_LABELS[t.status]}</div>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); onDelete(t); }}
+                    className="text-[10px] text-red-700 hover:text-red-600 font-medium">删除</button>
                 </div>
               </div>
             ))}

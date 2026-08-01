@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useMemo } from 'react';
+import { Suspense, useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { Task, Project, MILEntry } from '@/types';
 import { db } from '@/db/database';
@@ -9,6 +9,7 @@ import Badge from '@/components/shared/Badge';
 import Button from '@/components/shared/Button';
 import { formatDate } from '@/lib/utils';
 import { PHASE_LABELS } from '@/lib/ipd';
+import gsap from 'gsap';
 
 function MyTasksContent() {
   const searchParams = useSearchParams();
@@ -19,6 +20,7 @@ function MyTasksContent() {
   const [milEntries, setMilEntries] = useState<MILEntry[]>([]);
   const [filter, setFilter] = useState(filterParam);
   const [assigneeFilter, setAssigneeFilter] = useState('');
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     Promise.all([
@@ -48,7 +50,7 @@ function MyTasksContent() {
     if (filter === 'overdue') result = result.filter(t => t.endDate <= todayTs);
     else if (filter === 'soon') result = result.filter(t => t.endDate > todayTs && t.endDate <= fourteenDaysLater);
     else if (filter === 'high') result = result.filter(t => t.priority === 'P0' || t.risk === 'high');
-    else if (filter === 'done') result = [];
+    else if (filter === 'done' || filter === 'mil') result = [];
     if (assigneeFilter) result = result.filter(t => t.assignee === assigneeFilter);
     return result.sort((a, b) => a.endDate - b.endDate);
   }, [tasks, filter, assigneeFilter, todayTs, fourteenDaysLater]);
@@ -72,7 +74,20 @@ function MyTasksContent() {
 
   const isOverdue = (ts: number) => ts <= todayTs;
 
+  // Stagger entrance on tab/filter change
+  useEffect(() => {
+    const items = listRef.current?.querySelectorAll('[data-stagger]');
+    if (!items?.length) return;
+    gsap.fromTo(items, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.35, stagger: 0.04, ease: 'power2.out' });
+  }, [filter, assigneeFilter, activeTasks.length, filteredMILs.length]);
+
   async function completeTask(taskId: string) {
+    const row = listRef.current?.querySelector(`[data-task="${taskId}"]`);
+    if (row) {
+      await new Promise<void>(resolve => {
+        gsap.to(row, { opacity: 0, y: -6, duration: 0.22, onComplete: () => resolve() });
+      });
+    }
     await db.tasks.update(taskId, { status: 'done', actualEndDate: Date.now() });
     setTasks(tasks.map(t => t.id === taskId ? { ...t, status: 'done' as const, actualEndDate: Date.now() } : t));
   }
@@ -84,11 +99,11 @@ function MyTasksContent() {
 
   return (
     <AppShell>
-      <div className="p-6">
+      <div ref={listRef} className="p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">我的待办</h1>
-            <p className="text-sm text-gray-400 mt-1">跨项目聚合 · {activeTasks.length} 个待办</p>
+            <p className="text-sm text-gray-400 mt-1">跨项目聚合 · {filter === 'mil' ? `${filteredMILs.length} 个 MIL 问题` : `${activeTasks.length} 个待办`}</p>
           </div>
           <div className="flex gap-3">
             <select value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)}
@@ -113,7 +128,7 @@ function MyTasksContent() {
         </div>
 
         {/* Active Tasks */}
-        {filter !== 'done' && (
+        {filter !== 'done' && filter !== 'mil' && (
           <div className="mb-8">
             <h2 className="text-sm font-semibold text-gray-400 mb-4">待办任务</h2>
             {activeTasks.length === 0 ? (
@@ -123,7 +138,7 @@ function MyTasksContent() {
                 {activeTasks.map(t => {
                   const overdue = isOverdue(t.endDate);
                   return (
-                    <div key={t.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg ${overdue ? 'bg-red-50 border border-red-200' : 'bg-white border border-gray-200'}`}>
+                    <div key={t.id} data-stagger data-task={t.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg ${overdue ? 'bg-red-50 border border-red-200' : 'bg-white border border-gray-200'}`}>
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${overdue ? 'bg-red-500' : 'bg-blue-500'}`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -158,7 +173,7 @@ function MyTasksContent() {
               {filteredMILs.map(m => {
                 const overdue = m.deadline && isOverdue(m.deadline);
                 return (
-                  <div key={m.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg ${overdue ? 'bg-red-50 border border-red-200' : 'bg-white border border-gray-200'}`}>
+                  <div key={m.id} data-stagger className={`flex items-center gap-3 px-4 py-3 rounded-lg ${overdue ? 'bg-red-50 border border-red-200' : 'bg-white border border-gray-200'}`}>
                     <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${m.severity === 'A' ? 'bg-red-600 text-white' : m.severity === 'B' ? 'bg-yellow-600 text-white' : 'bg-gray-300 text-gray-700'}`}>{m.severity}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">

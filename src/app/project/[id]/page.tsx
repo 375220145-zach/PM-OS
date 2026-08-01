@@ -227,12 +227,6 @@ export default function ProjectOverviewPage() {
 }
 
 function MetricCard({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
-  const gradients: Record<string, string> = {
-    blue:   'border-l-indigo-500',
-    green:  'border-l-emerald-500',
-    red:    'border-l-red-500',
-    yellow: 'border-l-amber-500',
-  };
   const textColors: Record<string, string> = {
     blue: 'text-indigo-600', green: 'text-emerald-600', red: 'text-red-600', yellow: 'text-amber-600',
   };
@@ -240,7 +234,7 @@ function MetricCard({ label, value, sub, color }: { label: string; value: string
   const pct = isProgress ? parseInt(value) || 0 : 0;
 
   return (
-    <div className={`bg-white border border-gray-200 border-l-[3px] rounded-xl p-4 shadow-sm ${gradients[color] || gradients.blue}`}>
+    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
       <div className="text-xs text-gray-400 mb-1 tracking-wide">{label}</div>
       <div className="flex items-end gap-3">
         <span className={`text-2xl font-bold tracking-tight ${textColors[color] || 'text-gray-900'}`}>{value}</span>

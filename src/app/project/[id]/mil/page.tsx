@@ -10,6 +10,7 @@ import Button from '@/components/shared/Button';
 import Badge from '@/components/shared/Badge';
 import EmptyState from '@/components/shared/EmptyState';
 import Modal from '@/components/shared/Modal';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { generateId, formatDate } from '@/lib/utils';
 import { downloadTemplate, parseExcelFile, pickFile } from '@/lib/excel';
 
@@ -30,6 +31,7 @@ export default function MILPage() {
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [showForm, setShowForm] = useState(false);
   const [editEntry, setEditEntry] = useState<MILEntry | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MILEntry | null>(null);
   const [sevFilter, setSevFilter] = useState<string>('all');
   const [respFilter, setRespFilter] = useState<string>('');
 
@@ -69,7 +71,12 @@ export default function MILPage() {
     await db.milEntries.put(entry);
     setShowForm(false);
     setEditEntry(null);
-    refresh();
+    if (editEntry) {
+      setEntries(entries.map(e => e.id === entry.id ? entry : e));
+    } else {
+      // New entries go on top
+      setEntries([entry, ...entries]);
+    }
   }
 
   async function handleDownloadTemplate() {
@@ -103,6 +110,12 @@ export default function MILPage() {
     }));
     await db.milEntries.bulkAdd(newEntries);
     refresh();
+  }
+
+  async function handleDeleteEntry(entry: MILEntry) {
+    await db.milEntries.delete(entry.id);
+    setEntries(entries.filter(e => e.id !== entry.id));
+    setDeleteTarget(null);
   }
 
   async function moveStatus(entry: MILEntry, newStatus: MILStatus) {
@@ -179,7 +192,11 @@ export default function MILPage() {
                         <div className="text-sm text-gray-700 mb-1.5 line-clamp-2">{e.title}</div>
                         <div className="flex items-center justify-between text-xs text-gray-600">
                           <span>{e.responsible}</span>
-                          {e.deadline && <span>{formatDate(e.deadline)}</span>}
+                          <div className="flex items-center gap-2">
+                            {e.deadline && <span>{formatDate(e.deadline)}</span>}
+                            <button onClick={ev => { ev.stopPropagation(); setDeleteTarget(e); }}
+                              className="text-[10px] text-red-700 hover:text-red-600 font-medium">删除</button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -200,6 +217,7 @@ export default function MILPage() {
                   <th className="px-4 py-3">责任人</th>
                   <th className="px-4 py-3">发现阶段</th>
                   <th className="px-4 py-3">截止日期</th>
+                  <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
@@ -212,6 +230,7 @@ export default function MILPage() {
                     <td className="px-4 py-2 text-gray-500">{e.responsible}</td>
                     <td className="px-4 py-2 text-gray-500">{e.foundAt}</td>
                     <td className="px-4 py-2 text-gray-500">{e.deadline ? formatDate(e.deadline) : '-'}</td>
+                    <td className="px-4 py-2"><button onClick={ev => { ev.stopPropagation(); setDeleteTarget(e); }} className="text-[10px] text-red-700 hover:text-red-600 font-medium">删除</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -220,6 +239,15 @@ export default function MILPage() {
         )}
 
         <MILEntryForm open={showForm} onClose={() => { setShowForm(false); setEditEntry(null); }} entry={editEntry} onSave={handleSave} />
+
+        <ConfirmDialog
+          open={!!deleteTarget}
+          title="删除 MIL 问题"
+          message={`确认删除「${deleteTarget?.issueId || ''} ${deleteTarget?.title || ''}」？此操作不可恢复。`}
+          confirmLabel="删除"
+          onConfirm={() => deleteTarget && handleDeleteEntry(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </div>
     </AppShell>
   );

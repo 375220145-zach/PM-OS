@@ -78,7 +78,7 @@ export default function BudgetPage() {
 
   async function addItem() {
     const item = { category: 'mold' as BudgetCategory, name: '', estimated: 0, actual: 0, phase: selectedPhase, otherLabel: '' };
-    const next = [...budget, item];
+    const next = [item, ...budget];
     setBudget(next);
     await persistBudget(next);
   }
@@ -218,31 +218,6 @@ export default function BudgetPage() {
           </div>
         </div>
 
-        {/* Cost Distribution Chart */}
-        {budget.length > 0 && (
-          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
-            <h3 className="text-sm font-semibold text-gray-400 mb-4">成本分布</h3>
-            <div className="space-y-3">
-              {Object.entries(catTotals).map(([cat, cost]) => (
-                <div key={cat}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-500">{cat}</span>
-                    <span className="text-gray-700">¥{(cost / 1000).toFixed(0)}K ({maxCat > 0 ? ((cost / maxCat) * 100).toFixed(0) : 0}%)</span>
-                  </div>
-                  <div className="h-6 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all flex items-center justify-end pr-2 text-xs text-white font-medium"
-                      style={{ width: `${(cost / maxCat) * 100}%`, backgroundColor: CATEGORY_COLORS[Object.keys(CATEGORY_LABELS).find(k => CATEGORY_LABELS[k] === cat) || ''] || '#6b7280' }}
-                    >
-                      {((cost / maxCat) * 100) > 15 ? `¥${(cost / 1000).toFixed(0)}K` : ''}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {budget.length === 0 ? (
           <EmptyState icon="wallet" title="暂无费用数据" description="添加模具费、样品费、人力等预算项。BOM 物料总成本自动带入。" />
         ) : (
@@ -293,6 +268,31 @@ export default function BudgetPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Cost Distribution Chart — below the table so editing doesn't require scrolling */}
+        {budget.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mt-6">
+            <h3 className="text-sm font-semibold text-gray-400 mb-4">成本分布</h3>
+            <div className="space-y-3">
+              {Object.entries(catTotals).map(([cat, cost]) => (
+                <div key={cat}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-500">{cat}</span>
+                    <span className="text-gray-700">¥{(cost / 1000).toFixed(0)}K ({maxCat > 0 ? ((cost / maxCat) * 100).toFixed(0) : 0}%)</span>
+                  </div>
+                  <div className="h-6 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all flex items-center justify-end pr-2 text-xs text-white font-medium"
+                      style={{ width: `${(cost / maxCat) * 100}%`, backgroundColor: CATEGORY_COLORS[Object.keys(CATEGORY_LABELS).find(k => CATEGORY_LABELS[k] === cat) || ''] || '#6b7280' }}
+                    >
+                      {((cost / maxCat) * 100) > 15 ? `¥${(cost / 1000).toFixed(0)}K` : ''}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

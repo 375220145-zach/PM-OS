@@ -6,6 +6,7 @@ import { getKbStats } from '@/lib/graph/excel-importer';
 import { clearAllGraphData } from '@/lib/graph/store';
 import type { GraphNode } from '@/types';
 import AppShell from '@/components/layout/AppShell';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import KBCategoryTree from './components/KBCategoryTree';
 import KBEntryCard from './components/KBEntryCard';
 import KBSearchBar from './components/KBSearchBar';
@@ -28,6 +29,7 @@ export default function KbPage() {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<GraphNode | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -71,6 +73,21 @@ export default function KbPage() {
     setSearchQuery(q);
     applyFilter(allNodes, activeCategory, q);
   };
+
+  async function handleDeleteNode(node: GraphNode) {
+    // Remove node, its edges, and any linked image
+    const edges = await db.graphEdges
+      .filter(e => e.sourceId === node.id || e.targetId === node.id)
+      .toArray();
+    await db.graphEdges.bulkDelete(edges.map(e => e.id));
+    await db.kbImages.where('nodeId').equals(node.id).delete();
+    await db.graphNodes.delete(node.id);
+    const next = allNodes.filter(n => n.id !== node.id);
+    setAllNodes(next);
+    applyFilter(next, activeCategory, searchQuery);
+    setSelectedNode(null);
+    setDeleteTarget(null);
+  }
 
   return (
     <AppShell>
@@ -176,6 +193,12 @@ export default function KbPage() {
                       >
                         {editing ? '保存' : '编辑'}
                       </button>
+                      <button
+                        onClick={() => setDeleteTarget(selectedNode)}
+                        className="text-xs px-2 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        删除
+                      </button>
                       <button onClick={() => { setSelectedNode(null); setEditing(false); }} className="text-gray-400 hover:text-gray-600 text-xs p-1">
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -230,6 +253,15 @@ export default function KbPage() {
         </div>
       </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="删除知识条目"
+        message={`确认删除「${deleteTarget?.label || ''}」？关联关系和图片将一并删除，此操作不可恢复。`}
+        confirmLabel="删除"
+        onConfirm={() => deleteTarget && handleDeleteNode(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AppShell>
   );
 }

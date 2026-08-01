@@ -9,6 +9,7 @@ import ProjectHeader from '@/components/layout/ProjectHeader';
 import Button from '@/components/shared/Button';
 import Badge from '@/components/shared/Badge';
 import EmptyState from '@/components/shared/EmptyState';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { generateId } from '@/lib/utils';
 import { downloadTemplate, parseExcelFile, pickFile } from '@/lib/excel';
 
@@ -16,6 +17,7 @@ export default function ProcurementPage() {
   const params = useParams();
   const id = params.id as string;
   const [candidates, setCandidates] = useState<ProcurementCandidate[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<ProcurementCandidate | null>(null);
 
   useEffect(() => {
     db.procurementCandidates.where('projectId').equals(id).toArray().then(setCandidates);
@@ -24,7 +26,7 @@ export default function ProcurementPage() {
   async function add() {
     const c: ProcurementCandidate = { id: generateId(), projectId: id, name: '', location: '', summary: '', strengths: '', risks: '', countermeasures: '', isSelected: false };
     await db.procurementCandidates.put(c);
-    setCandidates([...candidates, c]);
+    setCandidates([c, ...candidates]);
   }
 
   async function updateItem(index: number, field: keyof ProcurementCandidate, value: unknown) {
@@ -34,9 +36,10 @@ export default function ProcurementPage() {
     setCandidates(next);
   }
 
-  async function removeItem(index: number) {
-    await db.procurementCandidates.delete(candidates[index].id);
-    setCandidates(candidates.filter((_, i) => i !== index));
+  async function removeItem(id: string) {
+    await db.procurementCandidates.delete(id);
+    setCandidates(candidates.filter(c => c.id !== id));
+    setDeleteTarget(null);
   }
 
   function handleDownloadTemplate() {
@@ -84,10 +87,10 @@ export default function ProcurementPage() {
               <div key={c.id} className={`bg-white border rounded-xl p-5 ${c.isSelected ? 'border-green-700' : 'border-gray-200'}`}>
                 <div className="flex items-center gap-3 mb-3">
                   <input value={c.name} onChange={e => updateItem(i, 'name', e.target.value)} placeholder="供应商名称" className="bg-transparent text-lg font-semibold text-gray-900 flex-1 focus:outline-none focus:border-b focus:border-blue-500" />
-                  <input value={c.location} onChange={e => updateItem(i, 'location', e.target.value)} placeholder="地点" className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-20" />
+                  <input value={c.location} onChange={e => updateItem(i, 'location', e.target.value)} placeholder="地点" title={c.location} className="bg-gray-100 border border-gray-200 rounded px-2 py-1 text-gray-700 text-xs w-28" />
                   <label className="flex items-center gap-1 text-xs text-gray-500"><input type="checkbox" checked={c.isSelected} onChange={e => updateItem(i, 'isSelected', e.target.checked)} />入选</label>
                   {c.isSelected && <Badge text="入选" variant="success" />}
-                  <button onClick={() => removeItem(i)} className="text-red-600 hover:text-red-300 text-xs ml-auto">删除</button>
+                  <button onClick={() => setDeleteTarget(candidates[i])} className="text-red-600 hover:text-red-300 text-xs ml-auto">删除</button>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {(['summary', 'strengths', 'risks', 'countermeasures'] as const).map((field, j) => (
@@ -102,6 +105,16 @@ export default function ProcurementPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirm */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="删除供应商"
+        message={`确认删除「${deleteTarget?.name || ''}」？此操作不可恢复。`}
+        confirmLabel="删除"
+        onConfirm={() => deleteTarget && removeItem(deleteTarget.id)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AppShell>
   );
 }

@@ -341,13 +341,19 @@ export default function HomePage() {
 function AlertCard({ label, count, color, icon, sub, onClick }: {
   label: string; count: number; color: 'red' | 'amber' | 'blue'; icon: 'alert-triangle' | 'calendar'; sub?: string; onClick: () => void;
 }) {
+  const accents = {
+    red:   { num: 'text-red-600',  icon: 'bg-red-50 text-red-500' },
+    amber: { num: 'text-amber-600', icon: 'bg-amber-50 text-amber-600' },
+    blue:  { num: 'text-indigo-600', icon: 'bg-indigo-50 text-indigo-600' },
+  } as const;
+  const a = accents[color];
   return (
     <button onClick={onClick} data-stagger className="bg-white border border-gray-200 rounded-xl p-4 text-left transition-all hover:shadow-md">
       <div className="flex items-center gap-2 mb-2">
-        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100"><Icon name={icon} size={14} stroke={2} className="text-gray-500" /></span>
+        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full ${a.icon}`}><Icon name={icon} size={14} stroke={2} /></span>
         <span className="text-xs text-gray-500 font-medium">{label}</span>
       </div>
-      <div className="text-2xl font-bold text-gray-900"><AnimatedNumber value={count} duration={0.6} /></div>
+      <div className={`text-3xl font-extrabold tracking-tight ${a.num}`}><AnimatedNumber value={count} duration={0.6} /></div>
       {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
     </button>
   );
