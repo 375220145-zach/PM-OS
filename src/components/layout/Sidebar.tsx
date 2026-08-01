@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Icon, { type IconName } from '../shared/Icon';
 import ConfirmDialog from '../shared/ConfirmDialog';
 import { useUnsaved } from '@/lib/unsaved-changes';
@@ -67,7 +67,9 @@ const MODULE_GROUPS: ModuleGroup[] = [
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const projectId = pathname.match(/\/project\/([^/]+)/)?.[1];
+  const searchParams = useSearchParams();
+  // 项目上下文：新路由 /project/*?p={id}（query 优先，兼容旧 /project/{id}）
+  const projectId = searchParams.get('p') ?? pathname.match(/\/project\/([^/]+)/)?.[1];
   const navRef = useRef<HTMLElement>(null);
   const SIDEBAR_SCROLL_KEY = 'pmos-sidebar-scroll';
   const { dirty, saveFn } = useUnsaved();

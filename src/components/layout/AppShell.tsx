@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 
@@ -66,14 +66,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-white text-gray-900">
       <div className="hidden md:block">
-        <Sidebar />
+        <Suspense fallback={null}><Sidebar /></Suspense>
       </div>
 
       {sidebarOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/60" onClick={close} />
           <div className="relative z-10">
-            <Sidebar onNavigate={close} />
+            <Suspense fallback={null}><Sidebar onNavigate={close} /></Suspense>
           </div>
         </div>
       )}
