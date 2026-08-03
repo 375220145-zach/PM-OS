@@ -49,6 +49,12 @@ export default function HomePage() {
       });
   }, [pathname]);
 
+  // 恢复上次选中的项目（切模块回来不丢选中 → AI 洞察缓存立即可见）
+  useEffect(() => {
+    const saved = localStorage.getItem('pmos-selected-project');
+    if (saved) setSelectedProjectId(saved);
+  }, []);
+
   async function handleDelete() {
     if (!deleteTarget) return;
     const pid = deleteTarget.id;
@@ -194,7 +200,12 @@ export default function HomePage() {
     );
   }
 
-  const pickProject = (pid: string | null) => { setSelectedProjectId(pid); setTick(Date.now()); };
+  const pickProject = (pid: string | null) => {
+    setSelectedProjectId(pid);
+    if (pid) localStorage.setItem('pmos-selected-project', pid);
+    else localStorage.removeItem('pmos-selected-project');
+    setTick(Date.now());
+  };
 
   return (
     <AppShell>
@@ -316,6 +327,7 @@ export default function HomePage() {
         <AIInsightsCard
           isDemo={isDemoMode()}
           hasSelectedProject={!!selectedProjectId}
+          projectId={selectedProjectId ?? undefined}
           onRunAnalysis={async () => {
             if (!selectedProjectId) return null;
             const data = await collectProjectDataWithGraph(selectedProjectId);

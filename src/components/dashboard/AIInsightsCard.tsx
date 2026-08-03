@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Button from '../shared/Button';
 import Icon from '../shared/Icon';
 
@@ -67,13 +67,62 @@ interface Props {
   onRunAnalysis: () => Promise<InsightsResult | null>;
   isDemo?: boolean;
   hasSelectedProject?: boolean;
+  projectId?: string;
 }
 
-export default function AIInsightsCard({ onRunAnalysis, isDemo, hasSelectedProject }: Props) {
+// 分析结果按项目缓存到 localStorage（key 带项目 ID，项目间隔离）
+// 切模块/切回项目时结果保留，直至下次运行分析覆盖
+const CACHE_PREFIX = 'pmos-ai-insights:';
+
+interface CachedInsights {
+  v: number;
+  savedAt: number;
+  result: InsightsResult;
+}
+
+function loadCachedInsights(projectId: string): CachedInsights | null {
+  try {
+    const raw = localStorage.getItem(`${CACHE_PREFIX}${projectId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedInsights;
+    if (!parsed?.result) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedInsights(projectId: string, result: InsightsResult) {
+  try {
+    localStorage.setItem(
+      `${CACHE_PREFIX}${projectId}`,
+      JSON.stringify({ v: 1, savedAt: Date.now(), result } satisfies CachedInsights),
+    );
+  } catch {
+    // localStorage 满/不可用时静默降级，不影响运行分析
+  }
+}
+
+export default function AIInsightsCard({ onRunAnalysis, isDemo, hasSelectedProject, projectId }: Props) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<InsightsResult | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('risk');
   const [error, setError] = useState<string | null>(null);
+
+  // 项目切换：先清空（避免串项目），再读该项目缓存
+  useEffect(() => {
+    setResult(null);
+    setSavedAt(null);
+    setError(null);
+    if (projectId) {
+      const cached = loadCachedInsights(projectId);
+      if (cached) {
+        setResult(cached.result);
+        setSavedAt(cached.savedAt);
+      }
+    }
+  }, [projectId]);
 
   const handleRun = useCallback(async () => {
     setLoading(true);
@@ -81,12 +130,16 @@ export default function AIInsightsCard({ onRunAnalysis, isDemo, hasSelectedProje
     try {
       const r = await onRunAnalysis();
       setResult(r);
+      if (r && projectId) {
+        saveCachedInsights(projectId, r);
+        setSavedAt(Date.now());
+      }
     } catch {
       setError('分析失败，请重试');
     } finally {
       setLoading(false);
     }
-  }, [onRunAnalysis]);
+  }, [onRunAnalysis, projectId]);
 
   const displayResult = (isDemo && !result) ? DEMO_INSIGHTS : result;
 
@@ -127,6 +180,11 @@ export default function AIInsightsCard({ onRunAnalysis, isDemo, hasSelectedProje
           <h2 className="text-sm font-semibold text-gray-900">AI 洞察</h2>
           {isDemo && (
             <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Demo 示例</span>
+          )}
+          {savedAt && !loading && (
+            <span className="text-xs text-gray-400">
+              上次分析 {new Date(savedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+            </span>
           )}
         </div>
         <Button size="sm" onClick={handleRun} disabled={loading || !hasSelectedProject}>
